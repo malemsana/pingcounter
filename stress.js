@@ -1,4 +1,4 @@
-const URL = "http://127.0.0.1:3000/p/pc_6600ac033f5888cd093a852be6d19da925bb881c042bdf4c4c688d9a22fc3fc0/Malemsana/test";
+const URL = "https://pingcounter.onrender.com/p/pc_6600ac033f5888cd093a852be6d19da925bb881c042bdf4c4c688d9a22fc3fc0/Malemsana/test";
 
 const TOTAL_REQUESTS = 12;
 const CONCURRENCY = 6;

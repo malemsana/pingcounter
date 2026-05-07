@@ -1,5 +1,5 @@
 const isLocalHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-const API_BASE = isLocalHost ? 'http://localhost:3000' : 'https://api.yourdomain.com'; // TODO: Update this to your production API URL
+const API_BASE = isLocalHost ? 'http://localhost:3000' : 'https://pingcounter.onrender.com';
 
 const api = {
     getToken: () => localStorage.getItem('token') || '',

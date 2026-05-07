@@ -238,7 +238,7 @@
                                     <div class="bg-zinc-900 rounded-xl p-4 font-mono text-[10px] text-zinc-400">
                                         <div class="text-zinc-600 mb-2">// Trigger on button click</div>
                                         <code class="block text-blue-400">
-fetch('https://api.pingcounter.dev/p/pc_123/site/signup', {
+fetch('https://pingcounter.onrender.com/p/pc_123/site/signup', {
   method: 'POST',
   mode: 'no-cors' // Passive tracking
 });
@@ -252,7 +252,7 @@ fetch('https://api.pingcounter.dev/p/pc_123/site/signup', {
                                     <div class="bg-zinc-900 rounded-xl p-4 font-mono text-[10px] text-zinc-400">
                                         <div class="text-zinc-600 mb-2">&lt;!-- Tracks on page load --&gt;</div>
                                         <code class="block text-emerald-400">
-&lt;img src="https://api.pingcounter.dev/p/pc_123/site/page-view" 
+&lt;img src="https://pingcounter.onrender.com/p/pc_123/site/page-view" 
      width="1" height="1" style="display:none" /&gt;
                                         </code>
                                     </div>
@@ -285,7 +285,7 @@ fetch('https://api.pingcounter.dev/p/pc_123/site/signup', {
                                     <code class="block text-purple-400">
 window.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') {
-    navigator.sendBeacon('https://api.pingcounter.dev/p/pc_123/site/exit');
+    navigator.sendBeacon('https://pingcounter.onrender.com/p/pc_123/site/exit');
   }
 });
                                     </code>

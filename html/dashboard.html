@@ -1,0 +1,1892 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ping Counter | Developer Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
+        .animate-fade-in {
+            animation: fadeIn 0.3s ease-out forwards;
+        }
+
+        .animate-slide-down {
+            animation: slideDown 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes slideInRight {
+            from {
+                transform: translateX(100%);
+            }
+
+            to {
+                transform: translateX(0);
+            }
+        }
+
+        .animate-slide-in-right {
+            animation: slideInRight 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .animate-slide-up {
+            animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        @keyframes scaleIn {
+            from {
+                opacity: 0;
+                transform: translate(-50%, -40%) scale(0.95);
+            }
+
+            to {
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(1);
+            }
+        }
+
+        .animate-scale-in {
+            animation: scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        .glow-pulse {
+            box-shadow: 0 0 15px rgba(59, 130, 246, 0.5);
+            animation: pulseGlow 2s infinite;
+        }
+
+        @keyframes pulseGlow {
+            0% {
+                box-shadow: 0 0 10px rgba(59, 130, 246, 0.4);
+            }
+
+            50% {
+                box-shadow: 0 0 20px rgba(59, 130, 246, 0.7);
+            }
+
+            100% {
+                box-shadow: 0 0 10px rgba(59, 130, 246, 0.4);
+            }
+        }
+    </style>
+</head>
+
+<body class="bg-[#09090b] text-slate-200 selection:bg-blue-500/30">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        const API_BASE = window.location.origin; // Dynamically use the current origin
+
+        // --- Shared UI Components ---
+        const Icon = ({ name, size = 20, className = "" }) => {
+            const iconRef = useRef(null);
+            useEffect(() => {
+                if (window.lucide && iconRef.current) {
+                    window.lucide.createIcons({
+                        attrs: { class: className, width: size, height: size },
+                        nameAttr: 'data-lucide',
+                        root: iconRef.current
+                    });
+                }
+            }, [name, size, className]);
+            return <span ref={iconRef}><i data-lucide={name}></i></span>;
+        };
+
+        const Toast = ({ message, type = 'success', onClose }) => (
+            <div className={`fixed bottom-6 right-6 flex items-center gap-3 px-5 py-4 rounded-2xl shadow-2xl border animate-fade-in z-[200] ${type === 'error' ? 'bg-red-900 border-red-800 text-white' : 'bg-slate-950 border-slate-800 border-slate-800 text-white'
+                }`}>
+                <Icon name={type === 'error' ? "alert-circle" : "check-circle"} size={20} className={type === 'success' ? 'text-emerald-400' : 'text-red-400'} />
+                <span className="text-sm font-bold tracking-wide">{message}</span>
+                <button onClick={onClose} className="ml-4 text-slate-400 hover:text-white transition"><Icon name="x" size={16} /></button>
+            </div>
+        );
+
+        const Logo = ({ className = "h-10", collapsed = false }) => (
+            <svg className={className} viewBox="0 0 200 40" xmlns="http://www.w3.org/2000/svg">
+                <g transform="translate(0, 6)" fill="none" stroke="#3b82f6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M22 12h-4l-3 9L9 3 l-3 9H2" transform="scale(1.2)" />
+                </g>
+                {!collapsed && (
+                    <text x="40" y="28" font-family="'Inter', sans-serif" font-weight="600" font-size="20" letter-spacing="-0.5">
+                        <tspan fill="#e2e8f0">ping</tspan>
+                        <tspan fill="#3b82f6">counter</tspan>
+                    </text>
+                )}
+            </svg>
+        );
+
+        const SidebarItem = ({ name, icon, active, onClick, badge }) => (
+            <button
+                onClick={onClick}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-md transition-all duration-150 group mb-0.5 ${active ? 'bg-zinc-800/50 text-slate-100 font-medium' : 'text-slate-400 hover:bg-zinc-800/30 hover:text-slate-200'
+                    }`}
+            >
+                <div className="flex items-center gap-2.5">
+                    <Icon name={icon} size={16} className={active ? 'text-blue-500' : 'text-slate-500 group-hover:text-slate-400'} />
+                    <span className="text-sm tracking-tight">{name}</span>
+                </div>
+                {badge > 0 && (
+                    <span className="bg-zinc-800 text-slate-300 border border-zinc-700 text-[10px] font-semibold px-1.5 py-0.5 rounded min-w-[18px] text-center">{badge}</span>
+                )}
+            </button>
+        );
+
+        const Sidebar = ({ activeView, setView, user, onLogout, onSettings, pendingCount }) => (
+            <aside className="w-56 border-r border-zinc-800 bg-[#09090b] flex flex-col h-screen sticky top-0 shrink-0">
+                <div className="p-4 border-b border-zinc-800/50 mb-2">
+                    <div className="cursor-pointer" onClick={() => setView('projects')}>
+                        <Logo className="h-7" />
+                    </div>
+                </div>
+
+                <div className="flex-1 px-3 overflow-y-auto mt-2">
+                    <div className="text-[10px] font-medium text-slate-500 uppercase tracking-widest mb-2 px-3">Navigation</div>
+                    <SidebarItem
+                        name="Dashboard"
+                        icon="layout-dashboard"
+                        active={activeView === 'projects'}
+                        onClick={() => setView('projects')}
+                    />
+                    <SidebarItem
+                        name="Usage & Plan"
+                        icon="bar-chart-3"
+                        active={activeView === 'account'}
+                        onClick={onSettings}
+                    />
+
+                    <div className="text-[10px] font-medium text-slate-500 uppercase tracking-widest mb-2 mt-6 px-3">Management</div>
+                    <SidebarItem
+                        name="Keys"
+                        icon="key"
+                        active={false}
+                        onClick={() => window.location.href = 'keys.html'}
+                    />
+                    <SidebarItem
+                        name="Settings"
+                        icon="settings"
+                        active={false}
+                        onClick={onSettings}
+                    />
+                </div>
+
+                <div className="p-3 border-t border-zinc-800">
+                    <button onClick={onSettings} className="w-full flex items-center gap-2.5 p-2 rounded-md hover:bg-zinc-800/30 transition group mb-1">
+                        <div className="w-8 h-8 rounded bg-zinc-800 text-slate-300 flex items-center justify-center font-medium border border-zinc-700">
+                            {(user?.full_name || user?.email || '?')[0].toUpperCase()}
+                        </div>
+                        <div className="text-left overflow-hidden">
+                            <div className="text-sm font-medium text-slate-200 truncate">{user?.full_name || 'Ping User'}</div>
+                            <div className="text-[10px] text-slate-500 truncate mt-0.5">Free Tier</div>
+                        </div>
+                    </button>
+                    <button onClick={onLogout} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-slate-400 hover:text-slate-200 hover:bg-zinc-800/30 transition group text-sm">
+                        <Icon name="log-out" size={16} />
+                        Logout
+                    </button>
+                </div>
+            </aside>
+        );
+
+        const Breadcrumb = ({ view, subView, project, setView, setSubView }) => {
+            const items = [{ label: 'Dashboard', onClick: () => setView('projects') }];
+            if (view === 'project-detail' && project) {
+                items.push({ label: project.project_name, onClick: () => setSubView('overview') });
+                if (subView !== 'overview') {
+                    items.push({ label: subView.charAt(0).toUpperCase() + subView.slice(1), active: true });
+                } else {
+                    items[items.length - 1].active = true;
+                }
+            } else if (view === 'account') {
+                items.push({ label: 'Account Settings', active: true });
+            } else {
+                items[0].active = true;
+            }
+
+            return (
+                <div className="h-14 border-b border-zinc-800 bg-[#09090b] flex items-center px-6 shrink-0">
+                    <div className="flex items-center gap-2 text-sm font-medium text-slate-500">
+                        {items.map((item, idx) => (
+                            <React.Fragment key={idx}>
+                                {idx > 0 && <Icon name="chevron-right" size={14} className="text-zinc-600" />}
+                                <span
+                                    className={`transition-colors cursor-pointer ${item.active ? 'text-slate-200' : 'hover:text-slate-300'}`}
+                                    onClick={item.onClick}
+                                >
+                                    {item.label}
+                                </span>
+                            </React.Fragment>
+                        ))}
+                    </div>
+                </div>
+            );
+        };
+
+        const BadgePreview = ({ style, slug }) => {
+            const baseUrl = `${API_BASE}/badge/${slug}?style=${style}`;
+            const markdown = `![Ping Counter](${baseUrl})`;
+            return (
+                <div className="bg-zinc-900/30 border border-zinc-800 rounded-lg p-5 flex flex-col items-center gap-3 group">
+                    <div className="text-xs font-medium text-slate-400 capitalize">{style} template</div>
+                    <div className="py-2">
+                        <img src={baseUrl} alt={`${style} badge`} className="h-5" />
+                    </div>
+                    <button
+                        onClick={() => {
+                            navigator.clipboard.writeText(markdown);
+                            alert('Markdown copied to clipboard!');
+                        }}
+                        className="w-full bg-zinc-800 py-1.5 rounded-md text-xs font-medium text-slate-300 hover:text-white hover:bg-zinc-700 transition border border-zinc-700"
+                    >
+                        Copy Markdown
+                    </button>
+                </div>
+            );
+        };
+
+        const KeyInspectModal = ({ apiKey, onClose, onSave, onRevoke, apiBase, project }) => {
+            if (!apiKey) return null;
+
+            const [scopes, setScopes] = React.useState(apiKey.scopes ? (typeof apiKey.scopes === 'string' ? apiKey.scopes.split(',').map(s => s.trim()) : apiKey.scopes) : ['ping']);
+
+            const handleScopeChange = (scope) => {
+                setScopes(prev => prev.includes(scope) ? prev.filter(s => s !== scope) : [...prev, scope]);
+            };
+
+            const isNew = !apiKey.key;
+            const displayKey = isNew ? "Will be generated upon save" : apiKey.key;
+
+            return (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-fade-in">
+                    <div className="absolute inset-0 bg-[#09090b]/80 backdrop-blur-sm" onClick={onClose}></div>
+                    <div className="bg-[#09090b] border border-zinc-800 w-full max-w-lg rounded-lg shadow-xl relative z-10 animate-slide-up flex flex-col h-full max-h-[85vh]">
+                        <div className="p-5 border-b border-zinc-800 flex justify-between items-center bg-zinc-900/30">
+                            <div>
+                                <h3 className="text-sm font-medium text-slate-200">{isNew ? 'Create New API Key' : 'Inspect API Key'}</h3>
+                                <p className="text-xs text-slate-500 mt-1">Manage access scopes and credentials</p>
+                            </div>
+                            <button onClick={onClose} className="text-slate-500 hover:text-slate-300 transition">
+                                <Icon name="x" size={18} />
+                            </button>
+                        </div>
+
+                        <div className="p-6 overflow-y-auto custom-scrollbar flex-1 space-y-6">
+                            {!isNew && (
+                                <div className="space-y-2">
+                                    <label className="text-xs font-medium text-slate-400">Secret Key</label>
+                                    <div className="flex items-center gap-2">
+                                        <input type="text" readOnly value={displayKey} className="flex-1 bg-zinc-950 border border-zinc-800 rounded-md px-3 py-2 text-sm font-mono text-slate-300" />
+                                        <button onClick={() => { navigator.clipboard.writeText(displayKey); alert('Copied!'); }} className="bg-zinc-800 hover:bg-zinc-700 text-slate-200 px-3 py-2 rounded-md transition text-sm font-medium border border-zinc-700">Copy</button>
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="space-y-3">
+                                <label className="text-xs font-medium text-slate-400">Access Permissions (Scopes)</label>
+                                <div className="space-y-2">
+                                    {['ping', 'read', 'admin'].map(s => (
+                                        <label key={s} className={`flex items-center gap-3 p-3 rounded-md border cursor-pointer transition ${scopes.includes(s) ? 'bg-blue-500/10 border-blue-500/30' : 'bg-zinc-900 border-zinc-800 hover:border-zinc-700'}`}>
+                                            <input type="checkbox" className="accent-blue-500" checked={scopes.includes(s)} onChange={() => handleScopeChange(s)} />
+                                            <div>
+                                                <div className="text-sm font-medium text-slate-200 capitalize">{s}</div>
+                                                <div className="text-xs text-slate-500">{s === 'ping' ? 'Can submit new events and counts.' : s === 'read' ? 'Can fetch private statistics.' : 'Full read/write access.'}</div>
+                                            </div>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {!isNew && scopes.includes('ping') && (
+                                <div className="space-y-2">
+                                    <label className="text-xs font-medium text-slate-400">Quick Integration</label>
+                                    <div className="bg-zinc-950 rounded-md border border-zinc-800 p-4 relative">
+                                        <pre className="text-[11px] font-mono text-blue-400 overflow-x-auto leading-relaxed">
+                                            <code>{`fetch("${apiBase}/p/${displayKey}/${project}/my-event", {\n  method: 'POST'\n})`}</code>
+                                        </pre>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="p-5 border-t border-zinc-800 bg-zinc-900/30 flex justify-between items-center gap-4">
+                            {!isNew ? (
+                                <button onClick={() => onRevoke(apiKey.key)} className="px-4 py-2 bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500 hover:text-white rounded-md text-sm font-medium transition">
+                                    Revoke Key
+                                </button>
+                            ) : <div></div>}
+
+                            <div className="flex gap-3">
+                                <button onClick={onClose} className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-slate-200 rounded-md text-sm font-medium transition">Cancel</button>
+                                <button onClick={() => onSave({ ...apiKey, scopes: scopes.join(',') })} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-md text-sm font-medium transition shadow-sm disabled:opacity-50" disabled={scopes.length === 0}>
+                                    {isNew ? 'Generate Key' : 'Save Changes'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const EventInspectModal = ({ event, keys, project, onClose, onCopy, onTogglePublic, apiBase, apiRequest, availableStyles = [] }) => {
+            if (!event) return null;
+
+            const [hoveredStyle, setHoveredStyle] = React.useState(null);
+            const [popoverPos, setPopoverPos] = React.useState({ top: 0, left: 0 });
+            const [selectedKey, setSelectedKey] = React.useState('');
+            const [eventStats, setEventStats] = React.useState(null);
+            const hideTimeout = React.useRef(null);
+
+            React.useEffect(() => {
+                if (keys && keys.length > 0 && !selectedKey) {
+                    const readKeys = keys.filter(k => k.scopes && (k.scopes.includes('read') || k.scopes.includes('admin')));
+                    if (readKeys.length > 0) setSelectedKey(readKeys[0].key);
+                    else setSelectedKey(keys[0].key);
+                }
+            }, [keys]);
+
+            React.useEffect(() => {
+                const fetchStats = async () => {
+                    const data = await apiRequest(`/api/projects/${project?.project_name}/events/${event?.event_name}/stats`);
+                    if (data) setEventStats(data);
+                };
+                if (event) fetchStats();
+            }, [event, project]);
+
+            const handleHover = (style, e) => {
+                if (hideTimeout.current) clearTimeout(hideTimeout.current);
+
+                if (!style) {
+                    hideTimeout.current = setTimeout(() => {
+                        setHoveredStyle(null);
+                    }, 300);
+                    return;
+                }
+
+                const mouseX = e.clientX;
+                const mouseY = e.clientY;
+
+                const winW = window.innerWidth;
+                const winH = window.innerHeight;
+
+                const popW = 340;
+                // Use a slightly smaller estimate, but we will also constrain the modal height via CSS.
+                const popH = 350;
+
+                // Start exactly at the cursor (Windows style)
+                let left = mouseX;
+                let top = mouseY;
+
+                // Flip to the left if it overflows the right edge
+                if (left + popW > winW - 10) {
+                    left = mouseX - popW;
+                }
+
+                // Flip above the cursor if it overflows the bottom edge
+                if (top + popH > winH - 10) {
+                    top = mouseY - popH;
+                }
+
+                // Final safety clamp to keep it strictly inside the viewport
+                left = Math.max(10, Math.min(left, winW - popW - 10));
+                top = Math.max(10, Math.min(top, winH - popH - 10));
+
+                setHoveredStyle(style);
+                setPopoverPos({ top, left });
+            };
+
+            const handleMenuEnter = () => {
+                if (hideTimeout.current) clearTimeout(hideTimeout.current);
+            };
+
+            const handleMenuLeave = () => {
+                setHoveredStyle(null);
+            };
+
+            const getPublicMd = (style) => `![Ping](${apiBase}/badge/${event.public_slug}?style=${style})`;
+            const getPublicUrl = (style) => `${apiBase}/badge/${event.public_slug}?style=${style}`;
+            const getAuthMd = (style, key) => `![Ping](${apiBase}/api/v1/badge/${key || '{key}'}/${project?.project_name}/${event.event_name}?style=${style})`;
+            const getAuthUrl = (style, key) => `${apiBase}/api/v1/badge/${key || '{key}'}/${project?.project_name}/${event.event_name}?style=${style})`;
+
+            return (
+                <div className="fixed inset-0 z-[150] flex items-center justify-center p-2 sm:p-4 animate-fade-in">
+                    <div className="absolute inset-0 bg-[#09090b]/80 backdrop-blur-sm" onClick={onClose}></div>
+                    <div className="w-full max-w-3xl h-[98vh] bg-[#09090b] border border-zinc-800 relative z-10 shadow-2xl flex flex-col rounded-xl overflow-hidden animate-slide-up">
+                        {/* Header */}
+                        <div className="px-8 py-5 border-b border-zinc-800 flex justify-between items-center bg-zinc-900/50 sticky top-0 z-20">
+                            <div className="flex items-center gap-4">
+                                <div className={`p-2 rounded-lg ${event.status === 'active' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-blue-500/10 text-blue-400'}`}>
+                                    <Icon name={event.status === 'active' ? 'activity' : 'clock'} size={20} />
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-semibold text-slate-100 leading-none mb-1">{event.event_name}</h3>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Event Infrastructure</span>
+                                        <span className="w-1 h-1 bg-zinc-700 rounded-full"></span>
+                                        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${event.status === 'active' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-blue-500/10 text-blue-400'}`}>
+                                            {event.status === 'active' ? 'Live Tracking' : 'Pending Approval'}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                            <button onClick={onClose} className="text-slate-500 hover:text-slate-300 transition p-2 hover:bg-zinc-800 rounded-md">
+                                <Icon name="x" size={20} />
+                            </button>
+                        </div>
+
+                        {/* Content */}
+                        <div className="flex-1 overflow-y-auto custom-scrollbar p-8 space-y-10">
+
+                            {/* Section 1: Access Control */}
+                            <section className="space-y-4">
+                                <div className="flex items-center gap-2 text-slate-200">
+                                    <Icon name="shield" size={18} className="text-blue-400" />
+                                    <h4 className="font-medium">Data Privacy & Access</h4>
+                                </div>
+                                <div className="bg-zinc-900/50 border border-zinc-800 p-6 rounded-xl space-y-5">
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <div className="text-sm font-medium text-slate-300">Public Availability</div>
+                                            <div className="text-[11px] text-slate-500 mt-1 max-w-sm">Allow unauthenticated access to badges and stats. Enabling this allows anyone to view the counter.</div>
+                                        </div>
+                                        <button
+                                            onClick={() => onTogglePublic(event.event_name, event.public_event)}
+                                            className={`px-4 py-2 rounded-md text-xs font-semibold transition-all ${event.public_event ? 'bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500 hover:text-white' : 'bg-blue-600 text-white hover:bg-blue-500'}`}
+                                        >
+                                            {event.public_event ? 'Disable Public Access' : 'Enable Public Access'}
+                                        </button>
+                                    </div>
+
+                                    <div className="pt-4 border-t border-zinc-800/50">
+                                        <div className="text-[10px] font-medium text-slate-400 uppercase tracking-widest mb-2">Education</div>
+                                        <p className="text-xs text-slate-500 leading-relaxed max-w-2xl">
+                                            By default, events are <strong className="text-slate-300">Private</strong>. This means they cannot be seen via public slugs or badges.
+                                            Use private access for internal metrics, sensitive data, or background processing where you only access data programmatically using API keys.
+                                        </p>
+                                    </div>
+                                </div>
+                            </section>
+
+                            {/* Section 2: Programmatic Retrieval */}
+                            <section className="space-y-4">
+                                <div className="flex items-center gap-2 text-slate-200">
+                                    <Icon name="terminal" size={18} className="text-emerald-400" />
+                                    <h4 className="font-medium">Programmatic Retrieval</h4>
+                                </div>
+                                <div className="bg-zinc-950 border border-zinc-800 p-6 rounded-xl space-y-6">
+                                    {/* Key Selector Integration */}
+                                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-6 border-b border-zinc-900">
+                                        <div className="space-y-1">
+                                            <div className="text-xs font-semibold text-slate-200">Active API Key</div>
+                                            <div className="text-[10px] text-slate-500">Select a key to populate integration codes.</div>
+                                        </div>
+                                        <select
+                                            value={selectedKey}
+                                            onChange={(e) => setSelectedKey(e.target.value)}
+                                            className="bg-zinc-900 border border-zinc-800 text-slate-200 text-[11px] px-3 py-1.5 rounded-md focus:outline-none focus:border-blue-500 transition-colors cursor-pointer w-full sm:w-48"
+                                        >
+                                            <option value="">Select Key...</option>
+                                            {keys?.filter(k => k.scopes && (k.scopes.includes('read') || k.scopes.includes('admin'))).map(k => (
+                                                <option key={k.key} value={k.key}>
+                                                    {k.key.substring(0, 10)}... ({k.scopes})
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <div className="flex items-center justify-between">
+                                            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Read JSON Stats <span className="text-blue-500/80 ml-1">(Requires 'read' scope)</span></div>
+                                        </div>
+                                        <div className="bg-[#09090b] p-4 rounded-lg border border-zinc-800/80 group hover:border-zinc-700 transition-all relative">
+                                            <div className="absolute right-2 top-2">
+                                                <button
+                                                    onClick={() => onCopy(`${apiBase}/api/v1/data/${selectedKey || '{read_key}'}/${project?.project_name}/${event.event_name}`)}
+                                                    className="p-1.5 bg-zinc-900 border border-zinc-800 text-slate-500 hover:text-blue-400 hover:border-blue-500/30 rounded transition shadow-sm"
+                                                    title="Copy to clipboard"
+                                                >
+                                                    <Icon name="copy" size={14} />
+                                                </button>
+                                            </div>
+                                            <code className="text-[11px] text-blue-400/90 font-mono break-all leading-relaxed pr-8 block">
+                                                <span className="text-blue-500 font-bold mr-2">GET</span>
+                                                {apiBase}/api/v1/data/<span className={selectedKey ? 'text-blue-200 underline decoration-blue-500/30 underline-offset-4' : 'text-slate-300'}>{selectedKey || '{read_key}'}</span>/{project?.project_name}/{event.event_name}
+                                            </code>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2 pt-2 border-t border-zinc-900">
+                                        <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Trigger Ping <span className="text-emerald-500/80 ml-1">(Requires 'ping' scope)</span></div>
+                                        <div className="bg-[#09090b] p-4 rounded-lg border border-zinc-800/80 group hover:border-zinc-700 transition-all relative">
+                                            <div className="absolute right-2 top-2">
+                                                <button
+                                                    onClick={() => onCopy(`${apiBase}/p/${selectedKey || '{ping_key}'}/${project?.project_name}/${event.event_name}`)}
+                                                    className="p-1.5 bg-zinc-900 border border-zinc-800 text-slate-500 hover:text-emerald-400 hover:border-emerald-500/30 rounded transition shadow-sm"
+                                                    title="Copy to clipboard"
+                                                >
+                                                    <Icon name="copy" size={14} />
+                                                </button>
+                                            </div>
+                                            <code className="text-[11px] text-emerald-400/90 font-mono break-all leading-relaxed pr-8 block">
+                                                <span className="text-emerald-500 font-bold mr-2">POST</span>
+                                                {apiBase}/p/<span className={selectedKey ? 'text-emerald-200 underline decoration-emerald-500/30 underline-offset-4' : 'text-slate-300'}>{selectedKey || '{ping_key}'}</span>/{project?.project_name}/{event.event_name}
+                                            </code>
+                                        </div>
+                                    </div>
+                                </div>
+                            </section>
+
+                            {/* Section 3: Badges & Templates */}
+                            <section className="space-y-4 pb-12">
+                                <div className="flex items-center gap-2 text-slate-200">
+                                    <Icon name="palette" size={18} className="text-purple-400" />
+                                    <h4 className="font-medium">Visual Integrations (Badges)</h4>
+                                </div>
+                                <div className="text-xs text-slate-500 max-w-2xl">
+                                    Hover over a template to copy its embed code. Private events require an API key to view the badge securely.
+                                </div>
+
+                                <div className="bg-zinc-900/30 border border-zinc-800 p-2 rounded-xl">
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-0.5">
+                                        {(availableStyles.length > 0 ? availableStyles : ['classic', 'flat', 'minimal', 'glass']).map(style => (
+                                            <div
+                                                key={style}
+                                                className="relative bg-[#09090b] p-8 flex flex-col items-center justify-center gap-4 group cursor-default"
+                                                onMouseEnter={(e) => handleHover(style, e)}
+                                                onMouseLeave={() => handleHover(null)}
+                                            >
+                                                <div className={`transition-opacity duration-300 ${hoveredStyle && hoveredStyle !== style ? 'opacity-30' : 'opacity-100'}`}>
+                                                    <img 
+                                                        src={`${apiBase}/api/badge-preview?style=${style}&label=${encodeURIComponent(event.event_name)}&count=${eventStats?.total || 0}`} 
+                                                        alt={style} 
+                                                        className="h-5" 
+                                                    />
+                                                    <div className="text-[9px] font-mono text-slate-600 uppercase mt-4 text-center">{style}</div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                        <div className="bg-zinc-900/20 flex flex-col items-center justify-center p-8 group">
+                                            <Icon name="plus" size={20} className="text-slate-700 mb-2 group-hover:text-slate-500 transition-colors" />
+                                            <span className="text-[9px] text-slate-600 font-medium uppercase tracking-wider text-center">More styles<br />coming soon</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </section>
+                        </div>
+                    </div>
+
+                    {/* Floating Context Menu - Windows Style (at Cursor) */}
+                    {hoveredStyle && (
+                        <div
+                            className="fixed z-[200] w-[340px] max-h-[90vh] overflow-y-auto custom-scrollbar bg-[#121214] border border-zinc-700 shadow-[0_40px_80px_rgba(0,0,0,0.8)] rounded-xl p-5 animate-scale-in flex flex-col pointer-events-auto"
+                            style={{
+                                top: `${popoverPos.top}px`,
+                                left: `${popoverPos.left}px`
+                            }}
+                            onMouseEnter={handleMenuEnter}
+                            onMouseLeave={handleMenuLeave}
+                        >
+                            <div className="flex items-center justify-between mb-4">
+                                <div className="flex items-center gap-2">
+                                    <div className="p-1.5 bg-blue-500/10 rounded">
+                                        <Icon name="copy" size={14} className="text-blue-400" />
+                                    </div>
+                                    <span className="text-[11px] font-bold text-slate-100 uppercase tracking-tighter">Copy Integration</span>
+                                </div>
+                                <div className="text-[9px] font-mono text-slate-500 bg-zinc-800/50 px-2 py-0.5 rounded border border-zinc-700/50">style: {hoveredStyle}</div>
+                            </div>
+
+                            <div className="space-y-4">
+                                {/* Key Selection for Private mode */}
+                                {!event.public_event && (
+                                    <div className="space-y-3">
+                                        <div className="flex items-center gap-2 p-2 bg-amber-500/5 border border-amber-500/20 rounded text-amber-500 text-[10px] font-medium">
+                                            <Icon name="lock" size={12} />
+                                            Private Event: Pick a 'read' key to authorize.
+                                        </div>
+                                        <div className="space-y-2">
+                                            <select
+                                                value={selectedKey}
+                                                onChange={(e) => setSelectedKey(e.target.value)}
+                                                className="w-full bg-zinc-950 border border-zinc-800 text-slate-300 text-xs rounded-lg px-3 py-2.5 outline-none focus:ring-1 focus:ring-blue-500 transition-all cursor-pointer"
+                                            >
+                                                <option value="" disabled>Choose API Key...</option>
+                                                {keys?.filter(k => k.scopes && (k.scopes.includes('read') || k.scopes.includes('admin'))).map(k => (
+                                                    <option key={k.key} value={k.key}>{k.key.substring(0, 12)}... ({k.scopes})</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* URL Previews & Copy Buttons */}
+                                <div className="space-y-5">
+                                    <div className="space-y-2.5">
+                                        <div className="flex items-center justify-between">
+                                            <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Markdown Embed</div>
+                                            <button
+                                                onClick={() => onCopy(event.public_event ? getPublicMd(hoveredStyle) : getAuthMd(hoveredStyle, selectedKey))}
+                                                className="text-[10px] text-blue-400 hover:text-blue-300 font-bold uppercase"
+                                            >
+                                                Copy
+                                            </button>
+                                        </div>
+                                        <div className="bg-zinc-950 p-3 rounded-lg border border-zinc-800/80 text-[10px] text-slate-400 font-mono break-all leading-relaxed max-h-24 overflow-y-auto custom-scrollbar">
+                                            {event.public_event ? getPublicMd(hoveredStyle) : getAuthMd(hoveredStyle, selectedKey || '{read_key}')}
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2.5">
+                                        <div className="flex items-center justify-between">
+                                            <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Direct Link</div>
+                                            <button
+                                                onClick={() => onCopy(event.public_event ? getPublicUrl(hoveredStyle) : getAuthUrl(hoveredStyle, selectedKey))}
+                                                className="text-[10px] text-slate-300 hover:text-white font-bold uppercase"
+                                            >
+                                                Copy
+                                            </button>
+                                        </div>
+                                        <div className="bg-zinc-950 p-3 rounded-lg border border-zinc-800/80 text-[10px] text-slate-500 font-mono break-all leading-relaxed max-h-24 overflow-y-auto custom-scrollbar">
+                                            {event.public_event ? getPublicUrl(hoveredStyle) : getAuthUrl(hoveredStyle, selectedKey || '{read_key}')}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="mt-4 pt-3 border-t border-zinc-800/50 flex items-center gap-2">
+                                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+                                <span className="text-[9px] text-slate-500 font-medium italic">Embed URL is updated in real-time.</span>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const ProjectList = ({ projects, onSelect, onCreateClick }) => (
+            <div className="animate-fade-in mt-4">
+                <div className="flex justify-between items-center mb-6">
+                    <div>
+                        <h2 className="text-xl font-semibold text-slate-100">Projects</h2>
+                        <p className="text-sm text-slate-500 mt-1">Manage your tracking workspaces</p>
+                    </div>
+                    <button
+                        onClick={onCreateClick}
+                        className="bg-blue-600 text-white px-4 py-2 rounded-md font-medium text-sm flex items-center gap-2 hover:bg-blue-500 transition border border-blue-500 shadow-sm"
+                    >
+                        <Icon name="plus" size={16} /> New Project
+                    </button>
+                </div>
+
+                <div className="border border-zinc-800 rounded-lg overflow-hidden bg-[#09090b]">
+                    <table className="w-full text-left text-sm">
+                        <thead>
+                            <tr className="border-b border-zinc-800 bg-zinc-900/30 text-xs font-medium text-slate-400">
+                                <th className="px-5 py-3 font-medium">Project Name</th>
+                                <th className="px-5 py-3 font-medium">Identifier</th>
+                                <th className="px-5 py-3 font-medium">Status</th>
+                                <th className="px-5 py-3 font-medium text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-zinc-800/50">
+                            {projects.map(p => (
+                                <tr key={p.id} className="hover:bg-zinc-800/20 transition-colors group cursor-pointer" onClick={() => onSelect(p)}>
+                                    <td className="px-5 py-3">
+                                        <div className="flex items-center gap-3">
+                                            <Icon name="folder" size={16} className="text-slate-500 group-hover:text-blue-400 transition-colors" />
+                                            <span className="font-medium text-slate-200">{p.project_name}</span>
+                                        </div>
+                                    </td>
+                                    <td className="px-5 py-3">
+                                        <code className="text-xs text-slate-500 font-mono bg-zinc-800/30 px-2 py-1 rounded">prj_{p.id}</code>
+                                    </td>
+                                    <td className="px-5 py-3">
+                                        <div className="flex items-center gap-2 text-xs text-slate-300">
+                                            <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
+                                            Active
+                                        </div>
+                                    </td>
+                                    <td className="px-5 py-3 text-right">
+                                        <button className="text-xs text-slate-400 hover:text-slate-100 font-medium transition-colors px-3 py-1 rounded-md hover:bg-zinc-800">
+                                            Manage
+                                        </button>
+                                    </td>
+                                </tr>
+                            ))}
+                            {projects.length === 0 && (
+                                <tr>
+                                    <td colSpan="4" className="px-5 py-12 text-center text-slate-500 text-sm">
+                                        No projects found. Create one to get started.
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        );
+
+        const AccountSettings = ({ user, usage, updateProfile, updatePassword, setView }) => (
+            <div className="animate-fade-in max-w-4xl space-y-8 mt-4">
+                <header>
+                    <h2 className="text-xl font-semibold text-slate-100">Account Settings</h2>
+                    <p className="text-sm text-slate-500 mt-1">Manage your identity and plan limits</p>
+                </header>
+
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div className="lg:col-span-2 space-y-6">
+                        <section className="bg-[#09090b] border border-zinc-800 rounded-lg overflow-hidden shadow-sm">
+                            <div className="px-5 py-4 border-b border-zinc-800 bg-zinc-900/30 flex items-center gap-2.5">
+                                <Icon name="user" size={16} className="text-blue-400" />
+                                <h3 className="font-medium text-slate-200 text-sm">Public Profile</h3>
+                            </div>
+                            <form onSubmit={updateProfile} className="p-5 space-y-5">
+                                <div>
+                                    <label className="block text-xs font-medium text-slate-400 mb-1.5">Email Address</label>
+                                    <input type="email" value={user?.email || ''} disabled className="w-full px-3 py-2 rounded-md bg-zinc-900 border border-zinc-800 outline-none text-slate-500 cursor-not-allowed text-sm" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-slate-400 mb-1.5">Full Name</label>
+                                    <input name="fullName" type="text" defaultValue={user?.full_name || ''} placeholder="Your Name" className="w-full px-3 py-2 rounded-md bg-[#09090b] border border-zinc-700 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all text-slate-200 text-sm" />
+                                </div>
+                                <button type="submit" className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-md text-sm font-medium transition border border-blue-500 shadow-sm">Save Changes</button>
+                            </form>
+                        </section>
+
+                        <section className="bg-[#09090b] border border-zinc-800 rounded-lg overflow-hidden shadow-sm">
+                            <div className="px-5 py-4 border-b border-zinc-800 bg-zinc-900/30 flex items-center gap-2.5">
+                                <Icon name="shield" size={16} className="text-slate-400" />
+                                <h3 className="font-medium text-slate-200 text-sm">Security & Password</h3>
+                            </div>
+                            <form onSubmit={updatePassword} className="p-5 space-y-5">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                    <div>
+                                        <label className="block text-xs font-medium text-slate-400 mb-1.5">Current Password</label>
+                                        <input name="currentPassword" type="password" required className="w-full px-3 py-2 rounded-md bg-[#09090b] border border-zinc-700 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all text-slate-200 text-sm" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-slate-400 mb-1.5">New Password</label>
+                                        <input name="newPassword" type="password" required className="w-full px-3 py-2 rounded-md bg-[#09090b] border border-zinc-700 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all text-slate-200 text-sm" />
+                                    </div>
+                                </div>
+                                <button type="submit" className="bg-zinc-800 hover:bg-zinc-700 text-slate-200 px-4 py-2 rounded-md text-sm font-medium transition border border-zinc-700">Update Password</button>
+                            </form>
+                        </section>
+                    </div>
+
+                    <div className="space-y-6">
+                        <section className="bg-[#09090b] border border-zinc-800 rounded-lg p-5">
+                            <div className="flex items-center justify-between mb-6">
+                                <h3 className="font-medium text-slate-200 text-sm">Plan Usage</h3>
+                                <span className="bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded text-xs font-medium">Free Tier</span>
+                            </div>
+                            {usage && (
+                                <div className="space-y-6">
+                                    <div>
+                                        <div className="flex justify-between items-end mb-1.5 text-xs font-medium">
+                                            <span className="text-slate-400">Projects</span>
+                                            <span className="text-slate-300">{usage.total_projects} / {usage.limits.projects}</span>
+                                        </div>
+                                        <div className="h-1.5 w-full bg-zinc-800 rounded-full overflow-hidden">
+                                            <div className="h-full bg-blue-500" style={{ width: `${(usage.total_projects / usage.limits.projects) * 100}%` }}></div>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div className="flex justify-between items-end mb-1.5 text-xs font-medium">
+                                            <span className="text-slate-400">Monthly Pings</span>
+                                            <span className="text-slate-300">{usage.total_pings.toLocaleString()} / {usage.limits.pings.toLocaleString()}</span>
+                                        </div>
+                                        <div className="h-1.5 w-full bg-zinc-800 rounded-full overflow-hidden">
+                                            <div className="h-full bg-emerald-500" style={{ width: `${Math.min(100, (usage.total_pings / usage.limits.pings) * 100)}%` }}></div>
+                                        </div>
+                                    </div>
+                                    <button disabled className="w-full py-2 bg-zinc-900 border border-zinc-800 rounded-md text-xs font-medium text-slate-500 cursor-not-allowed mt-2">Upgrade coming soon</button>
+                                </div>
+                            )}
+                        </section>
+
+                        <section className="bg-red-500/5 border border-red-500/20 rounded-lg p-5">
+                            <h3 className="font-medium text-red-500 text-sm mb-2 flex items-center gap-2">
+                                <Icon name="alert-triangle" size={16} /> Danger Zone
+                            </h3>
+                            <p className="text-xs text-slate-400 leading-relaxed mb-4">Once deleted, your account and all associated data cannot be recovered.</p>
+                            <button onClick={() => alert('Account deletion is not yet automated.')} className="w-full py-2 bg-red-500/10 border border-red-500/20 rounded-md text-xs font-medium text-red-400 hover:bg-red-500 hover:text-white transition">Delete Account</button>
+                        </section>
+                    </div>
+                </div>
+            </div>
+        );
+
+        const ProjectDetail = ({
+            project,
+            subView,
+            setSubView,
+            events,
+            keys,
+            overview,
+            onApprove,
+            onDeleteEvent,
+            onTogglePublic,
+            onInspect,
+            onStats,
+            onNewEvent,
+            onGenerateKey,
+            onDeleteProject,
+            onCopy,
+            onInspectKey,
+            settings,
+            onUpdateSettings
+        }) => {
+            const [localSettings, setLocalSettings] = useState({});
+
+            useEffect(() => {
+                if (settings) setLocalSettings(settings);
+            }, [settings]);
+
+            const handleToggleAutoApprove = () => {
+                const newSets = { ...localSettings, auto_approve: !localSettings?.auto_approve };
+                setLocalSettings(newSets);
+                onUpdateSettings(newSets);
+            };
+
+            const handleSaveRules = (e) => {
+                e.preventDefault();
+                onUpdateSettings(localSettings);
+            };
+
+            const primaryKey = keys.length > 0 ? keys[0].key : '{key}';
+
+            return (
+                <div className="animate-fade-in space-y-8">
+                    <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 border-b border-zinc-800 pb-6">
+                        <div>
+                            <h2 className="text-2xl font-semibold text-slate-100">{project.project_name}</h2>
+                            <div className="flex items-center gap-3 mt-1.5">
+                                <span className="text-xs text-slate-500">Workspace Detail</span>
+                                <span className="w-1 h-1 bg-zinc-700 rounded-full"></span>
+                                <span className="text-xs font-mono text-slate-400 cursor-copy hover:text-slate-200 transition-colors" onClick={() => onCopy(project.id)}>id: {project.id}</span>
+                            </div>
+                        </div>
+                        <nav className="flex bg-[#09090b] border border-zinc-800 p-1 rounded-lg">
+                            {[
+                                { id: 'overview', label: 'Overview', icon: 'layout-grid' },
+                                { id: 'events', label: 'Events', icon: 'zap' },
+                                { id: 'keys', label: 'API Keys', icon: 'key' },
+                                { id: 'settings', label: 'Settings', icon: 'settings' }
+                            ].map(tab => (
+                                <button
+                                    key={tab.id}
+                                    onClick={() => setSubView(tab.id)}
+                                    className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${subView === tab.id ? 'bg-zinc-800 text-slate-100 shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-zinc-800/50'
+                                        }`}
+                                >
+                                    <Icon name={tab.icon} size={14} /> {tab.label}
+                                </button>
+                            ))}
+                        </nav>
+                    </header>
+
+                    {subView === 'overview' && overview && (
+                        <div className="space-y-6 animate-fade-in">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div className="bg-[#09090b] border border-zinc-800 p-5 rounded-lg flex flex-col justify-between">
+                                    <span className="text-sm font-medium text-slate-400">Active Events</span>
+                                    <div className="text-3xl font-semibold text-slate-100 mt-2">{overview.total_active_events}</div>
+                                </div>
+                                <div className="bg-[#09090b] border border-zinc-800 p-5 rounded-lg flex flex-col justify-between">
+                                    <span className="text-sm font-medium text-slate-400">Pending Review</span>
+                                    <div className={`text-3xl font-semibold mt-2 ${overview.total_pending_events > 0 ? 'text-blue-500' : 'text-slate-100'}`}>{overview.total_pending_events}</div>
+                                </div>
+                                <div className="bg-[#09090b] border border-zinc-800 p-5 rounded-lg flex flex-col justify-between">
+                                    <span className="text-sm font-medium text-slate-400">Total API Keys</span>
+                                    <div className="text-3xl font-semibold text-slate-100 mt-2">{overview.total_keys}</div>
+                                </div>
+                            </div>
+
+                            <div className="bg-[#09090b] border border-zinc-800 rounded-lg overflow-hidden shadow-sm">
+                                <div className="px-5 py-4 border-b border-zinc-800 bg-zinc-900/30 flex items-center justify-between">
+                                    <div className="flex items-center gap-2.5">
+                                        <Icon name="rocket" size={16} className="text-blue-400" />
+                                        <h3 className="font-medium text-slate-200 text-sm">Quick Start Guide</h3>
+                                    </div>
+                                </div>
+                                <div className="p-6 space-y-8 max-h-[500px] overflow-y-auto custom-scrollbar">
+                                    <div className="space-y-4">
+                                        <div>
+                                            <h4 className="text-sm font-medium text-slate-200 mb-2">1. Trigger your first ping</h4>
+                                            <p className="text-xs text-slate-500 leading-relaxed">
+                                                Integrate PingCounter into your application by sending a request. We support <code className="text-blue-400 bg-blue-500/5 px-1 rounded">GET</code>, <code className="text-blue-400 bg-blue-500/5 px-1 rounded">POST</code>, and even simple <code className="text-blue-400 bg-blue-500/5 px-1 rounded">&lt;img&gt;</code> tags for easy tracking.
+                                                Events are created automatically on the first ping.
+                                            </p>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div className="space-y-2">
+                                                <div className="text-[10px] font-medium text-slate-500 uppercase tracking-wider">Option A: Fetch (POST)</div>
+                                                <div className="bg-zinc-950 rounded-md border border-zinc-800 p-4 relative group">
+                                                    <div className="absolute right-3 top-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <button
+                                                            onClick={() => onCopy(`fetch("${API_BASE}/p/${primaryKey}/${project.project_name}/hello-world", { method: 'POST' })`)}
+                                                            className="p-1.5 bg-zinc-900 text-slate-400 hover:text-slate-200 rounded border border-zinc-700 transition shadow-sm"
+                                                        >
+                                                            <Icon name="copy" size={14} />
+                                                        </button>
+                                                    </div>
+                                                    <pre className="text-[11px] font-mono text-blue-400 overflow-x-auto leading-relaxed">
+                                                        <code>{`fetch("${API_BASE}/p/${primaryKey}/${project.project_name}/hello-world", {\n  method: 'POST'\n})`}</code>
+                                                    </pre>
+                                                </div>
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                <div className="text-[10px] font-medium text-slate-500 uppercase tracking-wider">Option B: Image Tag (GET)</div>
+                                                <div className="bg-zinc-950 rounded-md border border-zinc-800 p-4 relative group">
+                                                    <div className="absolute right-3 top-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <button
+                                                            onClick={() => onCopy(`<img src="${API_BASE}/p/${primaryKey}/${project.project_name}/page-load" />`)}
+                                                            className="p-1.5 bg-zinc-900 text-slate-400 hover:text-slate-200 rounded border border-zinc-700 transition shadow-sm"
+                                                        >
+                                                            <Icon name="copy" size={14} />
+                                                        </button>
+                                                    </div>
+                                                    <pre className="text-[11px] font-mono text-emerald-400 overflow-x-auto leading-relaxed">
+                                                        <code>{`<img \n  src="${API_BASE}/p/${primaryKey}/${project.project_name}/page-load" \n/>`}</code>
+                                                    </pre>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-4">
+                                        <div>
+                                            <h4 className="text-sm font-medium text-slate-200 mb-2">2. Verify & Approve</h4>
+                                            <p className="text-xs text-slate-500 leading-relaxed">
+                                                Once you send the request, it will appear in the <span className="text-blue-400 cursor-pointer hover:underline" onClick={() => setSubView('events')}>Events tab</span> as pending.
+                                                Approve it to start collecting lifetime analytics and generate badges.
+                                            </p>
+                                        </div>
+                                        <div className="bg-blue-500/5 border border-blue-500/10 rounded-md p-4 flex items-start gap-3">
+                                            <div className="mt-0.5 text-blue-400">
+                                                <Icon name="info" size={16} />
+                                            </div>
+                                            <p className="text-xs text-slate-400 leading-relaxed">
+                                                Use the <code className="text-blue-300 font-mono">/badge</code> endpoint to display real-time counters in your README or dashboard once the event is approved.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {subView === 'events' && (
+                        <div className="space-y-4 animate-fade-in">
+                            <div className="flex justify-between items-center">
+                                <h3 className="text-sm font-medium text-slate-400">Event Infrastructure</h3>
+                                <button
+                                    onClick={onNewEvent}
+                                    className="bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-slate-200 px-3 py-1.5 rounded-md text-xs font-medium transition flex items-center gap-2"
+                                >
+                                    <Icon name="plus" size={14} /> New Event
+                                </button>
+                            </div>
+
+                            <div className="bg-[#09090b] border border-zinc-800 rounded-lg overflow-hidden shadow-sm">
+                                <table className="w-full text-left text-sm">
+                                    <thead>
+                                        <tr className="border-b border-zinc-800 bg-zinc-900/30 text-xs font-medium text-slate-400">
+                                            <th className="px-5 py-3 font-medium">Event Context</th>
+                                            <th className="px-5 py-3 font-medium">Status</th>
+                                            <th className="px-5 py-3 font-medium text-right">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-zinc-800/50">
+                                        {events.map(e => (
+                                            <tr key={e.id} className="hover:bg-zinc-800/20 transition-colors group">
+                                                <td className="px-5 py-3">
+                                                    <div className="flex items-center gap-3">
+                                                        <Icon name={e.status === 'active' ? 'activity' : 'clock-3'} size={16} className={e.status === 'active' ? 'text-emerald-500' : 'text-blue-400'} />
+                                                        <div>
+                                                            <div className="font-medium text-slate-200 text-sm">{e.event_name}</div>
+                                                            <div className="text-[11px] font-mono text-slate-500 mt-0.5">
+                                                                {e.public_event ? <span className="text-blue-400 bg-blue-500/10 px-1 py-0.5 rounded">Public</span> : <span>Private</span>}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="px-5 py-3">
+                                                    {e.status === 'pending' ? (
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-blue-400 text-xs font-medium bg-blue-500/10 px-2 py-0.5 rounded">Pending Approval ({e.pending_hits})</span>
+                                                            <button onClick={() => onApprove(e.event_name)} className="text-[11px] font-medium text-blue-400 hover:text-white bg-blue-600/20 px-2 py-1 rounded transition">Approve</button>
+                                                        </div>
+                                                    ) : (
+                                                        <span className="flex items-center gap-1.5 text-xs text-slate-300">
+                                                            <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span> Tracking
+                                                        </span>
+                                                    )}
+                                                </td>
+                                                <td className="px-5 py-3 text-right">
+                                                    <div className="flex items-center justify-end gap-1.5">
+                                                        <button onClick={() => onInspect(e)} className="text-slate-400 hover:text-slate-200 hover:bg-zinc-800 p-1.5 rounded-md transition" title="Settings"><Icon name="settings" size={14} /></button>
+                                                        <button onClick={() => onStats(e.event_name)} className="text-slate-400 hover:text-slate-200 hover:bg-zinc-800 p-1.5 rounded-md transition" title="Stats"><Icon name="bar-chart-3" size={14} /></button>
+                                                        <button onClick={() => onDeleteEvent(e.event_name)} className="text-slate-400 hover:text-red-400 hover:bg-zinc-800 p-1.5 rounded-md transition" title="Delete"><Icon name="trash-2" size={14} /></button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
+
+                    {subView === 'keys' && (
+                        <div className="space-y-4 animate-fade-in">
+                            <div className="flex justify-between items-center">
+                                <h3 className="text-sm font-medium text-slate-400">API Credentials</h3>
+                                <button onClick={onGenerateKey} className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-md text-xs font-medium transition shadow-sm border border-blue-500">Generate New Key</button>
+                            </div>
+                            <div className="bg-[#09090b] border border-zinc-800 rounded-lg overflow-hidden shadow-sm">
+                                <table className="w-full text-left text-sm">
+                                    <thead>
+                                        <tr className="border-b border-zinc-800 bg-zinc-900/30 text-xs font-medium text-slate-400">
+                                            <th className="px-5 py-3 font-medium">Secret API Key</th>
+                                            <th className="px-5 py-3 font-medium">Permissions</th>
+                                            <th className="px-5 py-3 font-medium text-right">Rate Limit</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-zinc-800/50">
+                                        {keys.map(k => {
+                                            const maskedKey = k.key.substring(0, 6) + '••••••••••••••••••••••••••••' + k.key.substring(k.key.length - 4);
+
+                                            // Handle scopes safely
+                                            let scopes = ['ping'];
+                                            if (typeof k.scopes === 'string') {
+                                                scopes = k.scopes.split(',').map(s => s.trim());
+                                            } else if (Array.isArray(k.scopes)) {
+                                                scopes = k.scopes;
+                                            }
+
+                                            return (
+                                                <tr key={k.key} onClick={() => onInspectKey(k)} className="hover:bg-zinc-800/20 transition-colors group cursor-pointer">
+                                                    <td className="px-5 py-3">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="text-slate-500">
+                                                                <Icon name="key" size={16} />
+                                                            </div>
+                                                            <code className="text-slate-300 font-mono text-sm tracking-tight">{maskedKey}</code>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-5 py-3">
+                                                        <div className="flex gap-1.5">
+                                                            {scopes.map(scope => (
+                                                                <span key={scope} className={`text-[10px] font-medium px-2 py-0.5 rounded uppercase tracking-widest ${scope === 'admin' ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20' :
+                                                                    scope === 'read' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' :
+                                                                        'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                                                    }`}>
+                                                                    {scope}
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-5 py-3 text-right">
+                                                        <span className="text-xs font-medium text-slate-400 bg-zinc-800/50 px-2 py-1 rounded">{k.rate_limit || 60} req/sec</span>
+                                                    </td>
+                                                </tr>
+                                            )
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
+
+                    {subView === 'settings' && (
+                        <div className="animate-fade-in space-y-6 max-w-2xl">
+                            <section className="bg-[#09090b] border border-zinc-800 rounded-lg overflow-hidden shadow-sm">
+                                <div className="px-5 py-4 border-b border-zinc-800 bg-zinc-900/30 flex items-center gap-2.5">
+                                    <Icon name="shield" size={16} className="text-blue-400" />
+                                    <h3 className="font-medium text-slate-200 text-sm">Security & Rules</h3>
+                                </div>
+                                <div className="p-5 space-y-6">
+                                    <div className="flex items-center justify-between p-3 bg-zinc-900/50 border border-zinc-800 rounded-xl">
+                                        <div className="space-y-0.5">
+                                            <div className="text-sm font-medium text-slate-200">Auto-Approve New Events</div>
+                                            <div className="text-[10px] text-slate-500">Automatically active new trackers instead of placing them in pending queue.</div>
+                                        </div>
+                                        <button
+                                            onClick={handleToggleAutoApprove}
+                                            className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200 focus:outline-none ${localSettings?.auto_approve ? 'bg-blue-600' : 'bg-zinc-700'}`}
+                                        >
+                                            <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition duration-200 ${localSettings?.auto_approve ? 'translate-x-6' : 'translate-x-1'}`} />
+                                        </button>
+                                    </div>
+
+                                    <form onSubmit={handleSaveRules} className="space-y-4">
+                                        <div className="space-y-2">
+                                            <label className="block text-xs font-medium text-slate-400 flex items-center gap-2">
+                                                <Icon name="globe" size={12} /> Allowed Origins (CORS)
+                                            </label>
+                                            <textarea
+                                                value={localSettings?.allowed_origins || ''}
+                                                onChange={(e) => setLocalSettings({ ...localSettings, allowed_origins: e.target.value })}
+                                                placeholder="example.com, localhost:3000 (Comma separated)"
+                                                className="w-full px-3 py-2.5 rounded-md bg-zinc-900 border border-zinc-800 text-slate-300 font-mono text-[11px] h-20 focus:border-blue-500 outline-none transition"
+                                            />
+                                            <p className="text-[10px] text-zinc-500 italic">Leave empty to allow all origins.</p>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <label className="block text-xs font-medium text-slate-400 flex items-center gap-2">
+                                                <Icon name="map-pin" size={12} /> Allowed IPs
+                                            </label>
+                                            <textarea
+                                                value={localSettings?.allowed_ips || ''}
+                                                onChange={(e) => setLocalSettings({ ...localSettings, allowed_ips: e.target.value })}
+                                                placeholder="1.2.3.4, 192.168.1.1 (Comma separated)"
+                                                className="w-full px-3 py-2.5 rounded-md bg-zinc-900 border border-zinc-800 text-slate-300 font-mono text-[11px] h-20 focus:border-blue-500 outline-none transition"
+                                            />
+                                            <p className="text-[10px] text-zinc-500 italic">Restrict tracking to specific server or user IPs.</p>
+                                        </div>
+
+                                        <button type="submit" className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold transition shadow-lg shadow-blue-900/20">
+                                            Save Security Rules
+                                        </button>
+                                    </form>
+                                </div>
+                            </section>
+
+                            <section className="bg-[#09090b] border border-zinc-800 rounded-lg overflow-hidden shadow-sm">
+                                <div className="px-5 py-4 border-b border-zinc-800 bg-zinc-900/30 flex items-center gap-2.5">
+                                    <Icon name="settings" size={16} className="text-slate-400" />
+                                    <h3 className="font-medium text-slate-200 text-sm">Workspace Info</h3>
+                                </div>
+                                <div className="p-5 space-y-5">
+                                    <div>
+                                        <label className="block text-xs font-medium text-slate-400 mb-1.5">Project Slug</label>
+                                        <input type="text" value={project.project_name} disabled className="w-full px-3 py-2 rounded-md bg-zinc-900 border border-zinc-800 text-slate-500 font-mono text-sm select-all" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-slate-400 mb-1.5">Workspace ID</label>
+                                        <input type="text" value={project.id} disabled className="w-full px-3 py-2 rounded-md bg-zinc-900 border border-zinc-800 text-slate-500 font-mono text-sm select-all" />
+                                    </div>
+                                </div>
+                            </section>
+
+                            <section className="bg-red-500/5 border border-red-500/20 rounded-lg p-5">
+                                <h3 className="font-medium text-red-500 text-sm mb-2 flex items-center gap-2">
+                                    <Icon name="alert-triangle" size={16} /> Danger Zone
+                                </h3>
+                                <p className="text-xs text-slate-400 leading-relaxed mb-4">Permanently delete this workspace, including all events, keys, and historical metrics. This action is irreversible.</p>
+                                <button
+                                    onClick={() => onDeleteProject(project.project_name)}
+                                    className="px-4 py-2 bg-red-500/10 border border-red-500/20 rounded-md text-xs font-medium text-red-400 hover:bg-red-500 hover:text-white transition"
+                                >
+                                    Delete Workspace
+                                </button>
+                            </section>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+
+        const NewEventModal = ({ isOpen, onClose, onSubmit, projectName }) => {
+            if (!isOpen) return null;
+            const [name, setName] = React.useState('');
+            return (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 animate-fade-in">
+                    <div className="absolute inset-0 bg-[#09090b]/80 backdrop-blur-sm" onClick={onClose}></div>
+                    <div className="bg-[#09090b] border border-zinc-800 w-full max-w-md rounded-lg p-6 relative z-10 shadow-xl animate-slide-down">
+                        <button onClick={onClose} className="absolute top-5 right-5 text-slate-500 hover:text-slate-300 transition"><Icon name="x" size={18} /></button>
+                        <div className="mb-6">
+                            <h3 className="text-lg font-semibold text-slate-100 mb-1">Manual Event</h3>
+                            <p className="text-xs text-slate-500">Pre-configure an event for {projectName}</p>
+                        </div>
+                        <form onSubmit={(e) => { e.preventDefault(); onSubmit(name); setName(''); }} className="space-y-5">
+                            <div>
+                                <label className="block text-xs font-medium text-slate-400 mb-1.5">Event Name</label>
+                                <input
+                                    autoFocus
+                                    type="text"
+                                    placeholder="e.g. signup-click"
+                                    value={name}
+                                    onChange={(e) => setName(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'))}
+                                    className="w-full bg-[#09090b] border border-zinc-700 rounded-md px-3 py-2 text-slate-200 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-slate-600"
+                                />
+                            </div>
+                            <div className="flex gap-3">
+                                <button type="button" onClick={onClose} className="flex-1 px-4 py-2 rounded-md bg-zinc-800 text-slate-300 font-medium text-sm hover:bg-zinc-700 transition">Cancel</button>
+                                <button type="submit" disabled={!name.trim()} className="flex-1 px-4 py-2 rounded-md bg-blue-600 text-white font-medium text-sm hover:bg-blue-500 transition shadow-sm disabled:opacity-50">Create Event</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            );
+        };
+
+        const StatsModal = ({ isOpen, data, eventName, days, onClose, onRefresh }) => {
+            if (!isOpen) return null;
+            return (
+                <div className="fixed inset-0 bg-[#09090b] z-[100] flex flex-col animate-fade-in overflow-hidden">
+                    <div className="bg-[#09090b] border-b border-zinc-800 px-6 py-4 flex justify-between items-center shrink-0 shadow-sm relative z-20">
+                        <div className="flex items-center gap-4">
+                            <button onClick={onClose} className="p-2 text-slate-500 hover:text-slate-300 transition rounded-md hover:bg-zinc-800">
+                                <Icon name="arrow-left" size={20} />
+                            </button>
+                            <div className="flex items-center gap-3 text-slate-200">
+                                <div className="text-blue-400"><Icon name="bar-chart-2" size={24} /></div>
+                                <div>
+                                    <h3 className="font-semibold text-lg text-slate-100 leading-none mb-1">{eventName}</h3>
+                                    <span className="text-xs text-slate-500 font-mono">Analytics / {days}d</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex bg-zinc-900 border border-zinc-800 p-1 rounded-md">
+                            {[
+                                { label: '7D', val: 7 },
+                                { label: '30D', val: 30 },
+                                { label: '90D', val: 90 },
+                                { label: '180D', val: 180 },
+                                { label: '1Y', val: 365 }
+                            ].map(tf => (
+                                <button
+                                    key={tf.val}
+                                    onClick={() => onRefresh(eventName, tf.val)}
+                                    className={`px-3 py-1 rounded text-xs font-medium transition-all ${days === tf.val ? 'bg-zinc-800 text-slate-100 shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-zinc-800/50'}`}
+                                >
+                                    {tf.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto p-6 lg:p-8 bg-[#09090b] relative z-10">
+                        <div className="max-w-6xl mx-auto space-y-6 pb-12">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div className="bg-[#09090b] border border-zinc-800 p-6 rounded-lg flex flex-col justify-between">
+                                    <span className="text-sm font-medium text-slate-400">Total Lifetime Pings</span>
+                                    <span className="text-3xl font-semibold text-slate-100 mt-2">{(data.total || 0).toLocaleString()}</span>
+                                </div>
+                                <div className="bg-[#09090b] border border-zinc-800 p-6 rounded-lg flex flex-col justify-between">
+                                    <span className="text-sm font-medium text-slate-400">Period Total ({days} Days)</span>
+                                    <span className="text-3xl font-semibold text-slate-100 mt-2">
+                                        {(data.history?.reduce((acc, curr) => acc + curr.count, 0) || 0).toLocaleString()}
+                                    </span>
+                                </div>
+                                <div className="bg-[#09090b] border border-zinc-800 p-6 rounded-lg flex flex-col justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-sm font-medium text-slate-400">Today's Throughput</span>
+                                        <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></div>
+                                    </div>
+                                    <span className="text-3xl font-semibold text-emerald-500 mt-2">{(data.today_total || 0).toLocaleString()}</span>
+                                </div>
+                            </div>
+
+                            <div className="bg-[#09090b] border border-zinc-800 p-6 rounded-lg">
+                                <div className="flex justify-between items-end mb-6">
+                                    <h4 className="font-medium text-slate-200 text-sm">Traffic Timeline</h4>
+                                    <span className="text-xs text-slate-500 flex items-center gap-1.5">
+                                        <Icon name="mouse-pointer-2" size={14} /> Interactive History
+                                    </span>
+                                </div>
+                                <div className="h-64 flex items-end gap-[2px] border-b border-zinc-800 pb-2">
+                                    {data.history && data.history.length > 0 ? (
+                                        data.history.map((day, idx) => {
+                                            const maxCount = Math.max(...data.history.map(d => d.count), 1);
+                                            const heightPercent = Math.max((day.count / maxCount) * 100, 2);
+                                            return (
+                                                <div key={idx} className="flex-1 bg-zinc-800 hover:bg-blue-500 rounded-t-sm transition-all relative group cursor-crosshair min-w-[2px]" style={{ height: `${heightPercent}%` }}>
+                                                    <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-zinc-900 border border-zinc-700 text-slate-200 p-3 rounded-md opacity-0 group-hover:opacity-100 whitespace-nowrap z-30 pointer-events-none shadow-xl transition-all duration-150 scale-95 group-hover:scale-100">
+                                                        <div className="text-slate-400 text-xs font-mono mb-1">{day.date}</div>
+                                                        <div className="text-sm font-medium">{day.count.toLocaleString()} pings</div>
+                                                    </div>
+                                                </div>
+                                            )
+                                        })
+                                    ) : (
+                                        <div className="w-full h-full flex flex-col items-center justify-center text-slate-600 gap-3">
+                                            <Icon name="bar-chart-2" size={32} className="opacity-20" />
+                                            <span className="font-medium text-sm text-slate-500">No historical data available.</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="bg-[#09090b] border border-zinc-800 rounded-lg overflow-hidden">
+                                <div className="p-5 border-b border-zinc-800 bg-zinc-900/30">
+                                    <h4 className="font-medium text-slate-200 text-sm">Raw Metric Ledger</h4>
+                                </div>
+                                <div className="overflow-x-auto max-h-[400px]">
+                                    <table className="w-full text-left text-sm">
+                                        <thead className="bg-zinc-900/50 sticky top-0 z-10 border-b border-zinc-800">
+                                            <tr>
+                                                <th className="px-6 py-3 font-medium text-slate-400">Date</th>
+                                                <th className="px-6 py-3 font-medium text-slate-400 text-right">Event Count</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-zinc-800/50">
+                                            {data.history && data.history.length > 0 ? (
+                                                data.history.slice().reverse().map((day, idx) => (
+                                                    <tr key={idx} className="hover:bg-zinc-800/20 transition-colors">
+                                                        <td className="px-6 py-3 font-mono text-xs text-slate-400">{day.date}</td>
+                                                        <td className="px-6 py-3 font-medium text-slate-200 text-right">{day.count.toLocaleString()}</td>
+                                                    </tr>
+                                                ))
+                                            ) : (
+                                                <tr>
+                                                    <td colSpan="2" className="p-8 text-center text-slate-500 text-sm">No ledger data found.</td>
+                                                </tr>
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- Main App ---
+        function App() {
+            const [token, setToken] = useState(localStorage.getItem('token') || '');
+            const [user, setUser] = useState(null);
+            const [view, setView] = useState('loading');
+            const [selectedProject, setSelectedProject] = useState(null);
+            const [subView, setSubView] = useState('overview');
+
+            const [projects, setProjects] = useState([]);
+            const [events, setEvents] = useState([]);
+            const [keys, setKeys] = useState([]);
+            const [overview, setOverview] = useState(null);
+            const [projectSettings, setProjectSettings] = useState(null);
+            const [statsModal, setStatsModal] = useState(null);
+
+            const [loading, setLoading] = useState(false);
+            const [toast, setToast] = useState(null);
+            const [prevPendingCount, setPrevPendingCount] = useState(0);
+            const [showGettingStarted, setShowGettingStarted] = useState(true);
+            const [badgeStyles, setBadgeStyles] = useState({});
+            const [showCreateModal, setShowCreateModal] = useState(false);
+            const [inspectModal, setInspectModal] = React.useState(null);
+            const [inspectKeyModal, setInspectKeyModal] = React.useState(null);
+            const [showNewEventModal, setShowNewEventModal] = React.useState(false);
+            const [accountUsage, setAccountUsage] = useState(null);
+            const [availableBadgeStyles, setAvailableBadgeStyles] = useState([]);
+
+            useEffect(() => {
+                if (token) fetchInitialData();
+                else setView('auth');
+            }, [token]);
+
+            // Auto Refresh mechanism
+            useEffect(() => {
+                let interval;
+                if (view === 'project-detail' && selectedProject) {
+                    interval = setInterval(() => {
+                        refreshProjectView(selectedProject.project_name, true);
+                    }, 5000);
+                }
+                return () => clearInterval(interval);
+            }, [view, selectedProject]);
+
+            // Detect new pending events for success feedback
+            useEffect(() => {
+                if (overview && overview.total_pending_events > prevPendingCount) {
+                    if (prevPendingCount === 0) showToast('New event detected! 🚀', 'success');
+                }
+                if (overview) setPrevPendingCount(overview.total_pending_events);
+            }, [overview]);
+
+            const showToast = (message, type = 'success') => {
+                setToast({ message, type });
+                setTimeout(() => setToast(null), 4000);
+            };
+
+            const fetchInitialData = async () => {
+                const res = await fetch(`${API_BASE}/api/me`, { headers: { 'Authorization': `Bearer ${token}` } });
+                if (res.ok) {
+                    setUser(await res.json());
+                    loadProjects();
+
+                    // Fetch badge templates
+                    const styles = await apiRequest('/api/badge-templates', {}, true);
+                    if (styles) setAvailableBadgeStyles(styles);
+                } else {
+                    handleLogout();
+                }
+            };
+
+            const handleLogout = () => {
+                localStorage.removeItem('token');
+                setToken('');
+                setUser(null);
+                setView('auth');
+            };
+
+            const enterAccount = async () => {
+                setView('loading');
+                const data = await apiRequest('/api/account/usage');
+                if (data) {
+                    setAccountUsage(data);
+                    setView('account');
+                } else {
+                    setView('projects');
+                }
+            };
+
+            const updateProfile = async (e) => {
+                e.preventDefault();
+                await apiRequest('/api/account/profile', { method: 'POST', body: JSON.stringify({ full_name: e.target.fullName.value }) });
+                fetchInitialData();
+                showToast('Profile updated');
+            };
+
+            const updatePassword = async (e) => {
+                e.preventDefault();
+                const res = await apiRequest('/api/account/password', { method: 'POST', body: JSON.stringify({ currentPassword: e.target.currentPassword.value, newPassword: e.target.newPassword.value }) });
+                if (res) {
+                    showToast('Password updated successfully');
+                    e.target.reset();
+                }
+            };
+
+            const handleCreateProject = async (e) => {
+                if (e) e.preventDefault();
+                const name = newProjectName.trim();
+                if (!name) return;
+                const data = await apiRequest('/api/projects', { method: 'POST', body: JSON.stringify({ name }) });
+                if (data) {
+                    setNewProjectName('');
+                    setShowCreateModal(false);
+                    loadProjects();
+                    showToast('Project created successfully');
+                }
+            };
+
+            const apiRequest = async (path, options = {}, silent = false) => {
+                if (!silent) setLoading(true);
+                try {
+                    const res = await fetch(`${API_BASE}${path}`, {
+                        ...options,
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json',
+                            ...options.headers
+                        }
+                    });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.error || 'bad_request');
+                    return data;
+                } catch (err) {
+                    if (!silent) showToast(err.message, 'error');
+                    if (err.message === 'unauthorized') handleLogout();
+                    return null;
+                } finally {
+                    if (!silent) setLoading(false);
+                }
+            };
+
+            const loadProjects = async () => {
+                const data = await apiRequest('/api/projects');
+                if (data) {
+                    setProjects(data);
+                    setView('projects');
+                }
+            };
+
+            const enterProject = async (p) => {
+                setSelectedProject(p);
+                setSubView('overview');
+                setView('project-detail');
+                setPrevPendingCount(0);
+                setShowGettingStarted(true); // Reset panel visibility
+                refreshProjectView(p.project_name);
+            };
+
+            const refreshProjectView = async (pName, silent = false) => {
+                let [evs, ks, ov, sets] = await Promise.all([
+                    apiRequest(`/api/projects/${pName}/events`, {}, silent),
+                    apiRequest(`/api/projects/${pName}/keys`, {}, silent),
+                    apiRequest(`/api/projects/${pName}/overview`, {}, silent),
+                    apiRequest(`/api/projects/${pName}/settings`, {}, silent)
+                ]);
+
+                // Phase 2: Auto Key Creation
+                if (ks && ks.length === 0 && !silent) {
+                    const newKey = await apiRequest(`/api/projects/${pName}/keys`, { method: 'POST', body: JSON.stringify({}) }, true);
+                    if (newKey) {
+                        ks = await apiRequest(`/api/projects/${pName}/keys`, {}, true);
+                    }
+                }
+
+                if (evs) setEvents(evs);
+                if (ks) setKeys(ks);
+                if (ov) setOverview(ov);
+                if (sets) setProjectSettings(sets);
+            };
+
+            const updateSettings = async (sets) => {
+                const res = await apiRequest(`/api/projects/${selectedProject.project_name}/settings`, {
+                    method: 'PUT',
+                    body: JSON.stringify(sets)
+                });
+                if (res) {
+                    showToast('Project settings updated');
+                    refreshProjectView(selectedProject.project_name);
+                }
+            };
+
+            const handleCreateEvent = async (name) => {
+                const data = await apiRequest(`/api/projects/${selectedProject.project_name}/events`, {
+                    method: 'POST',
+                    body: JSON.stringify({ event_name: name })
+                });
+                if (data) {
+                    showToast(`Event "${name}" created`);
+                    setShowNewEventModal(false);
+                    refreshProjectView(selectedProject.project_name);
+                }
+            };
+
+            const handleDeleteProject = async (pName) => {
+                const confirmed = confirm(`Are you absolutely sure you want to delete "${pName}"? This will delete all events and metrics. This cannot be undone.`);
+                if (!confirmed) return;
+
+                const data = await apiRequest(`/api/projects/${pName}`, { method: 'DELETE' });
+                if (data) {
+                    showToast(`Project "${pName}" deleted`);
+                    loadProjects();
+                }
+            };
+
+            const approveEvent = async (eName) => {
+                const data = await apiRequest(`/api/projects/${selectedProject.project_name}/events/${eName}/approve`, { method: 'POST' });
+                if (data) {
+                    showToast('Event approved and tracking started');
+                    refreshProjectView(selectedProject.project_name);
+                }
+            };
+
+            const deleteEvent = async (eName) => {
+                if (!confirm('Permanently delete this event and its history?')) return;
+                const data = await apiRequest(`/api/projects/${selectedProject.project_name}/events/${eName}`, { method: 'DELETE' });
+                if (data) refreshProjectView(selectedProject.project_name);
+            };
+
+            const generateKey = () => {
+                setInspectKeyModal({ isNew: true });
+            };
+
+            const saveKey = async (keyData) => {
+                if (keyData.isNew) {
+                    const data = await apiRequest(`/api/projects/${selectedProject.project_name}/keys`, {
+                        method: 'POST',
+                        body: JSON.stringify({ scopes: keyData.scopes })
+                    });
+                    if (data) {
+                        setInspectKeyModal(null);
+                        refreshProjectView(selectedProject.project_name);
+                    }
+                } else {
+                    const data = await apiRequest(`/api/projects/${selectedProject.project_name}/keys/${keyData.key}`, {
+                        method: 'PUT',
+                        body: JSON.stringify({ scopes: keyData.scopes })
+                    });
+                    if (data) {
+                        setInspectKeyModal(null);
+                        refreshProjectView(selectedProject.project_name);
+                        showToast('Key scopes updated');
+                    }
+                }
+            };
+
+            const revokeKey = async (keyId) => {
+                if (!confirm('Permanently revoke this API Key? Any integrations using it will break.')) return;
+                const data = await apiRequest(`/api/projects/${selectedProject.project_name}/keys/${keyId}`, { method: 'DELETE' });
+                if (data) {
+                    setInspectKeyModal(null);
+                    refreshProjectView(selectedProject.project_name);
+                }
+            };
+
+            const togglePublicBadge = async (eName, isCurrentlyPublic) => {
+                const data = await apiRequest(`/api/projects/${selectedProject.project_name}/events/${eName}/public`, {
+                    method: 'POST',
+                    body: JSON.stringify({ isPublic: !isCurrentlyPublic })
+                });
+                if (data) {
+                    showToast(!isCurrentlyPublic ? 'Public badge enabled' : 'Public badge disabled');
+                    refreshProjectView(selectedProject.project_name);
+                    // Update the local modal state if open
+                    if (inspectModal && inspectModal.event_name === eName) {
+                        setInspectModal({ ...inspectModal, public_event: !isCurrentlyPublic });
+                    }
+                }
+            };
+
+            const openStats = async (eName, days = 30) => {
+                const data = await apiRequest(`/api/projects/${selectedProject.project_name}/events/${eName}/stats?days=${days}`);
+                if (data) {
+                    setStatsModal({ eventName: eName, data, days });
+                }
+            };
+
+            const copyToClipboard = (text) => {
+                navigator.clipboard.writeText(text);
+                showToast('Copied to clipboard');
+            };
+
+            const primaryKey = keys.length > 0 ? keys[0].key : '{key}';
+            const fetchSnippet = `fetch("${API_BASE}/p/${primaryKey}/${selectedProject?.project_name}/signup")`;
+
+            if (view === 'loading') return (
+                <div className="h-screen flex items-center justify-center bg-slate-950">
+                    <div className="animate-spin text-blue-500"><Icon name="loader-2" size={40} /></div>
+                </div>
+            );
+
+            if (view === 'auth') return (
+                <div className="h-screen flex items-center justify-center p-4 bg-slate-950 font-sans">
+                    <div className="max-w-md w-full bg-slate-900 border border-slate-800 p-12 rounded-[2.5rem] shadow-2xl shadow-black">
+                        <div className="flex justify-center mb-10">
+                            <Logo className="h-16" />
+                        </div>
+                        <p className="text-center text-slate-500 font-bold text-[10px] uppercase tracking-[0.2em] mb-12">Universal Event Observability</p>
+                        <form onSubmit={async (e) => {
+                            e.preventDefault();
+                            const res = await fetch(`${API_BASE}/auth/login`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ email: e.target.email.value, password: e.target.password.value })
+                            });
+                            const data = await res.json();
+                            if (data.token) {
+                                localStorage.setItem('token', data.token);
+                                setToken(data.token);
+                            } else {
+                                showToast(data.error || 'Identity verification failed', 'error');
+                            }
+                        }} className="space-y-6">
+                            <input name="email" type="email" placeholder="Email Address" required className="w-full px-6 py-4 rounded-2xl bg-slate-950 border border-slate-800 outline-none focus:ring-2 ring-blue-500/50 transition-all font-medium text-slate-200" />
+                            <input name="password" type="password" placeholder="Password" required className="w-full px-6 py-4 rounded-2xl bg-slate-950 border border-slate-800 outline-none focus:ring-2 ring-blue-500/50 transition-all font-medium text-slate-200" />
+                            <button className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black hover:bg-blue-500 transition shadow-xl shadow-blue-900/20 uppercase tracking-widest text-xs mt-4">Authenticate</button>
+                        </form>
+                    </div>
+                    {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+                </div>
+            );
+
+            return (
+                <div className="flex h-screen bg-slate-950 text-slate-200 font-sans overflow-hidden">
+                    <Sidebar
+                        activeView={view}
+                        setView={setView}
+                        user={user}
+                        onLogout={handleLogout}
+                        onSettings={enterAccount}
+                    />
+
+                    <div className="flex-1 flex flex-col min-w-0 relative">
+                        <Breadcrumb
+                            view={view}
+                            subView={subView}
+                            project={selectedProject}
+                            setView={setView}
+                            setSubView={setSubView}
+                        />
+
+                        <main className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+                            <div className="max-w-7xl mx-auto">
+                                {view === 'projects' && (
+                                    <ProjectList
+                                        projects={projects}
+                                        onSelect={enterProject}
+                                        onCreateClick={() => setShowCreateModal(true)}
+                                    />
+                                )}
+
+                                {view === 'project-detail' && selectedProject && (
+                                    <ProjectDetail
+                                        project={selectedProject}
+                                        subView={subView}
+                                        setSubView={setSubView}
+                                        events={events}
+                                        keys={keys}
+                                        overview={overview}
+                                        onApprove={approveEvent}
+                                        onDeleteEvent={deleteEvent}
+                                        onTogglePublic={togglePublicBadge}
+                                        onInspect={(e) => setInspectModal(e)}
+                                        onStats={openStats}
+                                        onNewEvent={() => setShowNewEventModal(true)}
+                                        onGenerateKey={generateKey}
+                                        onDeleteProject={handleDeleteProject}
+                                        onCopy={(t) => copyToClipboard(t)}
+                                        settings={projectSettings}
+                                        onUpdateSettings={updateSettings}
+                                        onInspectKey={setInspectKeyModal}
+                                        availableStyles={availableBadgeStyles}
+                                    />
+                                )}
+
+                                {view === 'account' && accountUsage && (
+                                    <AccountSettings
+                                        user={user}
+                                        usage={accountUsage}
+                                        updateProfile={updateProfile}
+                                        updatePassword={updatePassword}
+                                    />
+                                )}
+                            </div>
+                        </main>
+                    </div>
+
+                    {/* Modals & Overlays */}
+                    <StatsModal
+                        isOpen={!!statsModal}
+                        data={statsModal?.data || {}}
+                        eventName={statsModal?.eventName}
+                        days={statsModal?.days}
+                        onClose={() => setStatsModal(null)}
+                        onRefresh={openStats}
+                    />
+
+                    <NewEventModal
+                        isOpen={showNewEventModal}
+                        onClose={() => setShowNewEventModal(false)}
+                        onSubmit={handleCreateEvent}
+                        projectName={selectedProject?.project_name}
+                    />
+
+                    <EventInspectModal
+                        event={inspectModal}
+                        keys={keys}
+                        project={selectedProject}
+                        onClose={() => setInspectModal(null)}
+                        onCopy={(t) => copyToClipboard(t)}
+                        onTogglePublic={togglePublicBadge}
+                        apiBase={API_BASE}
+                        apiRequest={apiRequest}
+                        availableStyles={availableBadgeStyles}
+                    />
+
+                    {inspectKeyModal && (
+                        <KeyInspectModal
+                            apiKey={inspectKeyModal}
+                            onClose={() => setInspectKeyModal(null)}
+                            onSave={saveKey}
+                            onRevoke={revokeKey}
+                            apiBase={API_BASE}
+                            project={selectedProject?.project_name}
+                        />
+                    )}
+
+                    {showCreateModal && (
+                        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 animate-fade-in">
+                            <div className="absolute inset-0 bg-[#09090b]/80 backdrop-blur-sm" onClick={() => setShowCreateModal(false)}></div>
+                            <div className="bg-[#09090b] border border-zinc-800 w-full max-w-md rounded-lg p-6 relative z-10 shadow-xl animate-slide-up">
+                                <div className="mb-6">
+                                    <h3 className="text-lg font-semibold text-slate-100 mb-1">Initialize Project</h3>
+                                    <p className="text-xs text-slate-500">Scoped environment for metric aggregation</p>
+                                </div>
+
+                                <form onSubmit={handleCreateProject} className="space-y-5">
+                                    <div>
+                                        <label className="block text-xs font-medium text-slate-400 mb-1.5">Unique Namespace</label>
+                                        <input
+                                            autoFocus
+                                            type="text"
+                                            placeholder="e.g. monolith-production"
+                                            value={newProjectName}
+                                            onChange={(e) => setNewProjectName(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'))}
+                                            className="w-full bg-[#09090b] border border-zinc-700 rounded-md px-3 py-2 text-slate-200 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all placeholder:text-slate-600"
+                                        />
+                                        <p className="text-[11px] font-mono text-slate-500 mt-2">Path: /p/:key/<span className="text-blue-400">{newProjectName || '{slug}'}</span>/:event</p>
+                                    </div>
+
+                                    <div className="flex gap-3">
+                                        <button type="button" onClick={() => setShowCreateModal(false)} className="flex-1 px-4 py-2 rounded-md bg-zinc-800 text-slate-300 font-medium text-sm hover:bg-zinc-700 transition">Cancel</button>
+                                        <button type="submit" disabled={!newProjectName.trim()} className="flex-[2] px-4 py-2 rounded-md bg-blue-600 text-white font-medium text-sm hover:bg-blue-500 transition shadow-sm disabled:opacity-50">Create Workspace</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+
+                    {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+
+</html>

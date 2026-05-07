@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ping Counter | Project</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="/assets/js/api.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap');
+        body { font-family: 'Plus Jakarta Sans', sans-serif; }
+        .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
+        .animate-slide-down { animation: slideDown 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        .animate-slide-in-right { animation: slideInRight 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes slideInRight { from { transform: translateX(100%); } to { transform: translateX(0); } }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body class="bg-[#0b1120] text-slate-50 selection:bg-blue-500/30">
+    <div id="root"></div>
+
+    <script type="text/babel" src="/assets/js/components.js"></script>
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // --- Extracted Modals ---
+        const EventInspectModal = ({ event, onClose, onCopy, onTogglePublic, apiBase }) => {
+            if (!event) return null;
+            return (
+                <div className="fixed inset-0 z-[150] flex items-center justify-end animate-fade-in">
+                    <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" onClick={onClose}></div>
+                    <div className="w-full max-w-xl h-full bg-slate-950 border-l border-slate-800 relative z-10 shadow-2xl flex flex-col animate-slide-in-right">
+                        <div className="p-8 border-b border-slate-800 flex justify-between items-center bg-slate-900/50">
+                            <div className="flex items-center gap-4">
+                                <div className="bg-blue-600/20 p-3 rounded-2xl">
+                                    <Icon name={event.status === 'active' ? 'activity' : 'clock'} size={24} className="text-blue-400" />
+                                </div>
+                                <div>
+                                    <h3 className="text-xl font-black uppercase tracking-tighter text-slate-50">{event.event_name}</h3>
+                                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">event-inspector / identity-verification</span>
+                                </div>
+                            </div>
+                            <button onClick={onClose} className="p-2 text-slate-500 hover:text-white transition bg-slate-800 rounded-xl"><Icon name="x" size={20} /></button>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto p-8 space-y-10">
+                            <section>
+                                <div className="flex items-center justify-between mb-6">
+                                    <div>
+                                        <h4 className="text-xs font-black text-slate-100 uppercase tracking-widest mb-1">Public Availability</h4>
+                                        <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wider">Allow external access to stats & badges</p>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <button 
+                                            onClick={() => onTogglePublic(event.event_name, event.public_event)}
+                                            className={`text-[10px] font-black px-4 py-2 rounded-xl uppercase tracking-widest transition-all ${
+                                                event.public_event 
+                                                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/30' 
+                                                    : 'bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700'
+                                            }`}
+                                        >
+                                            {event.public_event ? 'Disable Public Access' : 'Enable Public Access'}
+                                        </button>
+                                        <div className={`text-[10px] font-black px-3 py-1 rounded-lg uppercase tracking-widest ${event.public_event ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-slate-800 text-slate-500'}`}>
+                                            {event.public_event ? 'Public Enabled' : 'Private Only'}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {event.public_event ? (
+                                    <div className="space-y-6 animate-fade-in">
+                                        <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl flex items-center justify-between">
+                                            <div className="overflow-hidden mr-4">
+                                                <div className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">Public URL Endpoint</div>
+                                                <div className="text-xs font-mono text-slate-300 truncate tracking-tight">{`${apiBase}/public/${event.public_slug}`}</div>
+                                            </div>
+                                            <button onClick={() => onCopy(`${apiBase}/public/${event.public_slug}`)} className="p-3 bg-slate-800 text-slate-300 hover:text-white rounded-xl transition border border-slate-700/50"><Icon name="copy" size={16} /></button>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 gap-4">
+                                            <div className="text-xs font-black text-slate-100 uppercase tracking-widest border-b border-slate-800 pb-2">Badge Templates</div>
+                                            <div className="grid grid-cols-1 gap-4">
+                                                <div className="flex items-center justify-between bg-slate-900 p-4 rounded-xl border border-slate-800">
+                                                    <img src={`${apiBase}/badge/${event.public_slug}?style=classic`} className="h-6" />
+                                                    <button onClick={() => onCopy(`![Ping](${apiBase}/badge/${event.public_slug}?style=classic)`)} className="text-[10px] font-black uppercase text-blue-400 hover:text-white transition">Copy MD</button>
+                                                </div>
+                                                <div className="flex items-center justify-between bg-slate-900 p-4 rounded-xl border border-slate-800">
+                                                    <img src={`${apiBase}/badge/${event.public_slug}?style=glass`} className="h-6" />
+                                                    <button onClick={() => onCopy(`![Ping](${apiBase}/badge/${event.public_slug}?style=glass)`)} className="text-[10px] font-black uppercase text-blue-400 hover:text-white transition">Copy MD</button>
+                                                </div>
+                                                <div className="flex items-center justify-between bg-slate-900 p-4 rounded-xl border border-slate-800">
+                                                    <img src={`${apiBase}/badge/${event.public_slug}?style=minimal`} className="h-6" />
+                                                    <button onClick={() => onCopy(`![Ping](${apiBase}/badge/${event.public_slug}?style=minimal)`)} className="text-[10px] font-black uppercase text-blue-400 hover:text-white transition">Copy MD</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="bg-slate-900/50 border border-slate-800 border-dashed rounded-[2rem] p-12 text-center text-slate-500">
+                                        <Icon name="lock" size={32} className="mx-auto mb-4 opacity-20" />
+                                        <p className="text-xs font-bold uppercase tracking-widest">Public access is disabled</p>
+                                        <p className="text-[10px] mt-2 leading-relaxed max-w-[200px] mx-auto uppercase">Enable in event settings to generate badges.</p>
+                                    </div>
+                                )}
+                            </section>
+
+                            <section>
+                                <h4 className="text-xs font-black text-slate-100 uppercase tracking-widest mb-6 border-b border-slate-800 pb-2">Technical Implementation</h4>
+                                <div className="space-y-4">
+                                    <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800 font-mono text-xs text-blue-400">
+                                        <span className="text-slate-500">// Trigger ping</span><br/>
+                                        {`fetch("${apiBase}/p/{key}/{project}/${event.event_name}")`}
+                                    </div>
+                                </div>
+                            </section>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const NewEventModal = ({ isOpen, onClose, onSubmit, projectName }) => {
+            if (!isOpen) return null;
+            const [name, setName] = React.useState('');
+            return (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 animate-fade-in">
+                    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose}></div>
+                    <div className="bg-slate-950 border border-slate-800 w-full max-w-md rounded-[2.5rem] p-10 relative z-10 shadow-2xl animate-slide-down">
+                        <button onClick={onClose} className="absolute top-8 right-8 text-slate-500 hover:text-white transition"><Icon name="x" size={20} /></button>
+                        <div className="mb-8 font-black uppercase">
+                            <h3 className="text-2xl text-slate-50 tracking-tighter mb-2">Manual Event</h3>
+                            <p className="text-[10px] text-slate-500 tracking-widest">Pre-configure an event for {projectName}</p>
+                        </div>
+                        <form onSubmit={(e) => { e.preventDefault(); onSubmit(name); setName(''); }} className="space-y-6">
+                            <div>
+                                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Event Name</label>
+                                <input 
+                                    autoFocus
+                                    type="text" 
+                                    placeholder="e.g. signup-click"
+                                    value={name}
+                                    onChange={(e) => setName(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'))}
+                                    className="w-full bg-slate-800 border border-slate-700/50 rounded-2xl px-5 py-4 text-slate-50 font-bold outline-none focus:ring-2 ring-blue-500/40 transition-all placeholder:text-slate-700"
+                                />
+                            </div>
+                            <button type="submit" disabled={!name} className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-blue-700 transition shadow-xl shadow-blue-500/20 disabled:opacity-50">Create Event</button>
+                        </form>
+                    </div>
+                </div>
+            );
+        };
+
+        const StatsModal = ({ isOpen, data, eventName, days, onClose, onRefresh }) => {
+            if (!isOpen) return null;
+            return (
+                <div className="fixed inset-0 bg-[#0b1120] z-[100] flex flex-col animate-fade-in overflow-hidden">
+                    <div className="bg-slate-950 border-b border-slate-800 px-8 py-5 flex justify-between items-center shrink-0 shadow-sm relative z-20">
+                        <div className="flex items-center gap-6">
+                            <button onClick={onClose} className="p-3 -ml-2 text-slate-400 hover:text-blue-400 transition rounded-2xl hover:bg-slate-900 border border-transparent hover:border-slate-800">
+                                <Icon name="arrow-left" size={24} />
+                            </button>
+                            <div className="flex items-center gap-4 text-blue-400">
+                                <div className="bg-blue-600/10 p-3 rounded-2xl border border-blue-500/20"><Icon name="bar-chart-2" size={28} /></div>
+                                <div>
+                                    <h3 className="font-black text-3xl text-slate-50 uppercase tracking-tighter leading-none">{eventName}</h3>
+                                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest mt-1 block">Operational Analytics / {days}d</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div className="flex bg-slate-900 p-1 rounded-2xl border border-slate-800">
+                            {[
+                                { label: '7D', val: 7 },
+                                { label: '30D', val: 30 },
+                                { label: '90D', val: 90 },
+                                { label: '180D', val: 180 },
+                                { label: '1Y', val: 365 }
+                            ].map(tf => (
+                                <button 
+                                    key={tf.val}
+                                    onClick={() => onRefresh(eventName, tf.val)}
+                                    className={`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${days === tf.val ? 'bg-slate-800 text-blue-400 shadow-lg border border-slate-700' : 'text-slate-500 hover:text-slate-300'}`}
+                                >
+                                    {tf.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    
+                    <div className="flex-1 overflow-y-auto p-12 bg-slate-950 relative z-10">
+                        <div className="max-w-7xl mx-auto space-y-12 pb-12">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                                <div className="bg-blue-600 p-10 rounded-[2.5rem] shadow-2xl shadow-blue-900/40 flex flex-col justify-between h-56 border border-blue-400/30">
+                                    <span className="text-[10px] font-black text-blue-100 uppercase tracking-widest">Total Lifetime Pings</span>
+                                    <span className="text-7xl font-black tracking-tighter text-white">{(data.total || 0).toLocaleString()}</span>
+                                </div>
+                                <div className="bg-slate-900 border border-slate-800 shadow-sm p-10 rounded-[2.5rem] flex flex-col justify-between h-56">
+                                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Period Total ({days} Days)</span>
+                                    <span className="text-7xl font-black text-slate-100 tracking-tighter">
+                                        {(data.history?.reduce((acc, curr) => acc + curr.count, 0) || 0).toLocaleString()}
+                                    </span>
+                                </div>
+                                <div className="bg-emerald-600/10 border border-emerald-500/20 p-10 rounded-[2.5rem] flex flex-col justify-between h-56">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Today's Throughput</span>
+                                        <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+                                    </div>
+                                    <span className="text-7xl font-black text-emerald-400 tracking-tighter">{(data.today_total || 0).toLocaleString()}</span>
+                                </div>
+                            </div>
+
+                            <div className="bg-slate-900 border border-slate-800 p-12 rounded-[3rem]">
+                                <div className="flex justify-between items-end mb-12">
+                                    <h4 className="font-black text-slate-100 uppercase tracking-widest text-xs">Traffic Timeline</h4>
+                                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                                        <Icon name="mouse-pointer-2" size={12} /> Interactive History
+                                    </span>
+                                </div>
+                                <div className="h-80 flex items-end gap-1.5 border-b border-slate-800 pb-4">
+                                    {data.history && data.history.length > 0 ? (
+                                        data.history.map((day, idx) => {
+                                            const maxCount = Math.max(...data.history.map(d => d.count), 1);
+                                            const heightPercent = Math.max((day.count / maxCount) * 100, 2);
+                                            return (
+                                                <div key={idx} className="flex-1 bg-slate-800 hover:bg-blue-600 rounded-t-lg transition-all relative group cursor-crosshair min-w-[4px]" style={{ height: `${heightPercent}%` }}>
+                                                    <div className="absolute bottom-full mb-4 left-1/2 -translate-x-1/2 bg-slate-950 border border-slate-800 text-white p-5 rounded-2xl opacity-0 group-hover:opacity-100 whitespace-nowrap z-30 pointer-events-none shadow-2xl transition-all duration-200 scale-95 group-hover:scale-100">
+                                                        <div className="text-slate-500 text-[10px] font-black uppercase tracking-widest mb-2">{day.date}</div>
+                                                        <div className="text-2xl font-black tracking-tight">{day.count.toLocaleString()} <span className="text-slate-500 text-xs font-bold uppercase ml-1">pings</span></div>
+                                                    </div>
+                                                </div>
+                                            )
+                                        })
+                                    ) : (
+                                        <div className="w-full h-full flex flex-col items-center justify-center text-slate-600 gap-4">
+                                            <Icon name="bar-chart-2" size={48} className="opacity-10" />
+                                            <span className="font-black uppercase text-[10px] tracking-widest">Collecting historical fragments...</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="bg-slate-900 border border-slate-800 rounded-[3rem] overflow-hidden">
+                                <div className="p-8 border-b border-slate-800 bg-slate-800/20">
+                                    <h4 className="font-black text-slate-100 uppercase tracking-widest text-xs">Raw Metric Ledger</h4>
+                                </div>
+                                <div className="overflow-x-auto max-h-[500px]">
+                                    <table className="w-full text-left">
+                                        <thead className="bg-slate-950 sticky top-0 z-10 border-b border-slate-800">
+                                            <tr>
+                                                <th className="px-10 py-6 font-black text-[10px] text-slate-500 uppercase tracking-widest">Temporal Index</th>
+                                                <th className="px-10 py-6 font-black text-[10px] text-slate-500 uppercase tracking-widest text-right">Event Count</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-800">
+                                            {data.history && data.history.length > 0 ? (
+                                                data.history.slice().reverse().map((day, idx) => (
+                                                    <tr key={idx} className="hover:bg-slate-800/40 transition-colors">
+                                                        <td className="px-10 py-6 font-mono text-sm text-slate-400">{day.date}</td>
+                                                        <td className="px-10 py-6 font-black text-slate-100 text-right text-lg">{day.count.toLocaleString()}</td>
+                                                    </tr>
+                                                ))
+                                            ) : (
+                                                <tr>
+                                                    <td colSpan="2" className="p-20 text-center text-slate-600 font-black uppercase text-[10px] tracking-widest">Synchronizing ledger...</td>
+                                                </tr>
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const ProjectDetail = ({ 
+            project, 
+            subView, 
+            setSubView, 
+            events, 
+            keys, 
+            overview, 
+            onApprove, 
+            onDeleteEvent, 
+            onTogglePublic, 
+            onInspect, 
+            onStats, 
+            onNewEvent, 
+            onGenerateKey, 
+            onDeleteProject, 
+            onCopy 
+        }) => {
+            const primaryKey = keys.length > 0 ? keys[0].key : '{key}';
+
+            return (
+                <div className="animate-fade-in space-y-8">
+                    <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 border-b border-slate-800 pb-8">
+                        <div>
+                            <h2 className="text-4xl font-black text-slate-50 uppercase tracking-tighter leading-tight">{project.project_name}</h2>
+                            <div className="flex items-center gap-4 mt-2">
+                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Workspace Detail</span>
+                                <span className="w-1 h-1 bg-slate-700 rounded-full"></span>
+                                <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest cursor-copy" onClick={() => onCopy(project.id)}>ID: {project.id}</span>
+                            </div>
+                        </div>
+                        <nav className="flex bg-slate-900 border border-slate-800 p-1 rounded-2xl shadow-inner">
+                            {[
+                                { id: 'overview', label: 'Overview', icon: 'layout-grid' },
+                                { id: 'events', label: 'Events', icon: 'zap' },
+                                { id: 'keys', label: 'API Keys', icon: 'key' },
+                                { id: 'settings', label: 'Settings', icon: 'settings' }
+                            ].map(tab => (
+                                <button 
+                                    key={tab.id}
+                                    onClick={() => setSubView(tab.id)} 
+                                    className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${
+                                        subView === tab.id ? 'bg-slate-800 text-blue-400 shadow-lg border border-slate-700' : 'text-slate-500 hover:text-slate-300'
+                                    }`}
+                                >
+                                    <Icon name={tab.icon} size={14} /> {tab.label}
+                                </button>
+                            ))}
+                        </nav>
+                    </header>
+
+                    {subView === 'overview' && overview && (
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-fade-in">
+                            <div className="bg-slate-950 border border-slate-800 p-8 rounded-3xl flex flex-col justify-between h-44 hover:border-slate-700 transition-colors">
+                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Active Events</span>
+                                <div className="text-6xl font-black tracking-tighter text-slate-100">{overview.total_active_events}</div>
+                            </div>
+                            <div className="bg-slate-950 border border-slate-800 p-8 rounded-3xl flex flex-col justify-between h-44 hover:border-slate-700 transition-colors">
+                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Pending Review</span>
+                                <div className={`text-6xl font-black tracking-tighter ${overview.total_pending_events > 0 ? 'text-blue-500' : 'text-slate-100'}`}>{overview.total_pending_events}</div>
+                            </div>
+                            <div className="bg-slate-950 border border-slate-800 p-8 rounded-3xl flex flex-col justify-between h-44 hover:border-slate-700 transition-colors">
+                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Total API Keys</span>
+                                <div className="text-6xl font-black tracking-tighter text-slate-100">{overview.total_keys}</div>
+                            </div>
+                        </div>
+                    )}
+
+                    {subView === 'events' && (
+                        <div className="space-y-6 animate-fade-in">
+                            <div className="flex justify-between items-center">
+                                <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Event Infrastructure</h3>
+                                <button 
+                                    onClick={onNewEvent}
+                                    className="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition flex items-center gap-2"
+                                >
+                                    <Icon name="plus" size={14} /> New Event
+                                </button>
+                            </div>
+
+                            <div className="bg-slate-950 border border-slate-800 rounded-3xl overflow-hidden shadow-sm">
+                                <table className="w-full text-left text-sm">
+                                    <thead>
+                                        <tr className="bg-slate-900 border-b border-slate-800 text-[10px] font-black uppercase text-slate-500 tracking-widest">
+                                            <th className="px-8 py-4">Event Context</th>
+                                            <th className="px-8 py-4">Status</th>
+                                            <th className="px-8 py-4 text-right">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-800/50">
+                                        {events.map(e => (
+                                            <tr key={e.id} className="hover:bg-slate-900/30 transition-colors group">
+                                                <td className="px-8 py-4">
+                                                    <div className="flex items-center gap-4">
+                                                        <div className={`p-2 rounded-lg ${e.status === 'active' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-blue-500/10 text-blue-400'}`}>
+                                                            <Icon name={e.status === 'active' ? 'activity' : 'clock-3'} size={18} />
+                                                        </div>
+                                                        <div>
+                                                            <div className="font-black text-slate-100 uppercase tracking-tight text-sm">{e.event_name}</div>
+                                                            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">
+                                                                {e.public_event ? <span className="text-blue-400">PUBLIC</span> : <span className="text-slate-700">PRIVATE</span>}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="px-8 py-4">
+                                                    {e.status === 'pending' ? (
+                                                        <div className="flex items-center gap-3">
+                                                            <span className="bg-blue-600/10 text-blue-400 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest border border-blue-500/20">Pending Approval ({e.pending_hits})</span>
+                                                            <button onClick={() => onApprove(e.event_name)} className="text-[9px] font-black text-blue-400 hover:text-white uppercase tracking-widest bg-blue-600/20 px-3 py-1 rounded-lg transition">Approve</button>
+                                                        </div>
+                                                    ) : (
+                                                        <span className="flex items-center gap-2 text-[9px] font-black text-emerald-500 uppercase tracking-widest">
+                                                            <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span> Tracking
+                                                        </span>
+                                                    )}
+                                                </td>
+                                                <td className="px-8 py-4 text-right">
+                                                    <div className="flex items-center justify-end gap-2">
+                                                        <button onClick={() => onInspect(e)} className="bg-slate-800 hover:bg-slate-700 text-slate-300 p-2 rounded-lg transition border border-slate-700/50"><Icon name="settings" size={14}/></button>
+                                                        <button onClick={() => onStats(e.event_name)} className="bg-slate-800 hover:bg-slate-700 text-slate-300 p-2 rounded-lg transition border border-slate-700/50"><Icon name="bar-chart-3" size={14}/></button>
+                                                        <button onClick={() => onDeleteEvent(e.event_name)} className="bg-red-500/10 hover:bg-red-500/20 text-red-400 p-2 rounded-lg transition border border-red-500/10"><Icon name="trash-2" size={14}/></button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
+
+                    {subView === 'keys' && (
+                        <div className="space-y-6 animate-fade-in">
+                            <div className="flex justify-between items-center">
+                                <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">API Credentials</h3>
+                                <button onClick={onGenerateKey} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition shadow-lg shadow-blue-500/20">Generate New Key</button>
+                            </div>
+                            <div className="bg-slate-950 border border-slate-800 rounded-3xl overflow-hidden shadow-sm">
+                                <table className="w-full text-left text-sm">
+                                    <thead>
+                                        <tr className="bg-slate-900 border-b border-slate-800 text-[10px] font-black uppercase text-slate-500 tracking-widest">
+                                            <th className="px-8 py-4">Secret API Key</th>
+                                            <th className="px-8 py-4">Rate Limit</th>
+                                            <th className="px-8 py-4 text-right">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-800/50">
+                                        {keys.map(k => (
+                                            <tr key={k.key} className="hover:bg-slate-900/30 transition-colors">
+                                                <td className="px-8 py-5">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="bg-slate-800 p-2 rounded-lg text-blue-400 shadow-inner group relative">
+                                                            <Icon name="key" size={16} />
+                                                        </div>
+                                                        <code className="text-slate-100 font-mono text-sm tracking-tight">{k.key}</code>
+                                                    </div>
+                                                </td>
+                                                <td className="px-8 py-5">
+                                                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest bg-slate-800 px-3 py-1 rounded-lg">{k.rate_limit || 60} req/sec</span>
+                                                </td>
+                                                <td className="px-8 py-5 text-right">
+                                                    <button onClick={() => onCopy(k.key)} className="bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white px-4 py-2 rounded-xl transition border border-slate-700/50 text-[10px] font-black uppercase tracking-widest">Copy Key</button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
+
+                    {subView === 'settings' && (
+                        <div className="animate-fade-in space-y-12">
+                            <section>
+                                <h3 className="text-xl font-black uppercase tracking-tighter text-slate-50 mb-4">Workspace Info</h3>
+                                <div className="bg-slate-950 border border-slate-800 p-8 rounded-3xl space-y-6">
+                                    <div>
+                                        <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Project Slug</label>
+                                        <input type="text" value={project.project_name} disabled className="w-full px-5 py-3 rounded-xl bg-slate-900 border border-slate-800 text-slate-500 font-bold select-all" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Workspace ID</label>
+                                        <input type="text" value={project.id} disabled className="w-full px-5 py-3 rounded-xl bg-slate-900 border border-slate-800 text-slate-500 font-bold select-all" />
+                                    </div>
+                                </div>
+                            </section>
+
+                            <section className="bg-red-500/5 border border-red-500/20 rounded-[2rem] p-8">
+                                <h3 className="font-black text-red-500 uppercase tracking-widest text-xs mb-4 flex items-center gap-2">
+                                    <Icon name="alert-triangle" size={16} /> Danger Zone
+                                </h3>
+                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest leading-relaxed mb-6">Permanently delete this workspace, including all events, keys, and historical metrics. This action is irreversible.</p>
+                                <button 
+                                    onClick={() => onDeleteProject(project.project_name)}
+                                    className="px-8 py-3 bg-red-500/10 border border-red-500/20 rounded-xl text-[10px] font-black uppercase tracking-widest text-red-500 hover:bg-red-500 hover:text-white transition"
+                                >
+                                    Delete Workspace
+                                </button>
+                            </section>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        function Project() {
+            const [user, setUser] = useState(null);
+            const [projectName, setProjectName] = useState(new URLSearchParams(window.location.search).get('name') || window.location.pathname.split('/').pop());
+            const [selectedProject, setSelectedProject] = useState({ project_name: projectName });
+            const [subView, setSubView] = useState('overview'); 
+            const [events, setEvents] = useState([]);
+            const [keys, setKeys] = useState([]);
+            const [overview, setOverview] = useState(null);
+            
+            const [loading, setLoading] = useState(true);
+            const [toast, setToast] = useState(null);
+            const [statsModal, setStatsModal] = useState(null); 
+            const [inspectModal, setInspectModal] = useState(null); 
+            const [showNewEventModal, setShowNewEventModal] = useState(false);
+
+            useEffect(() => {
+                if (!api.getToken()) {
+                    window.location.href = 'auth.html';
+                } else {
+                    fetchData();
+                }
+            }, []);
+
+            // Auto Refresh mechanism
+            useEffect(() => {
+                let interval = setInterval(() => {
+                    refreshProjectView(true);
+                }, 5000);
+                return () => clearInterval(interval);
+            }, []);
+
+            const fetchData = async () => {
+                setLoading(true);
+                try {
+                    const u = await api.request('/api/me');
+                    setUser(u);
+                    await refreshProjectView(false);
+                } catch (err) {
+                    showToast('Failed to load project data', 'error');
+                }
+                setLoading(false);
+            };
+
+            const refreshProjectView = async (silent = false) => {
+                try {
+                    let [evs, ks, ov] = await Promise.all([
+                        api.request(`/api/projects/${projectName}/events`, {}, silent),
+                        api.request(`/api/projects/${projectName}/keys`, {}, silent),
+                        api.request(`/api/projects/${projectName}/overview`, {}, silent)
+                    ]);
+
+                    if (ks && ks.length === 0 && !silent) {
+                        const newKey = await api.request(`/api/projects/${projectName}/keys`, { method: 'POST', body: JSON.stringify({}) }, true);
+                        if (newKey) {
+                            ks = await api.request(`/api/projects/${projectName}/keys`, {}, true);
+                        }
+                    }
+
+                    if (evs) setEvents(evs);
+                    if (ks) setKeys(ks);
+                    if (ov) {
+                        setOverview(ov);
+                        setSelectedProject({ ...selectedProject, id: ov.project_id || selectedProject.id });
+                    }
+                } catch (e) {
+                    if (!silent) showToast('Failed to refresh data', 'error');
+                }
+            };
+
+            const showToast = (message, type = 'success') => {
+                setToast({ message, type });
+                setTimeout(() => setToast(null), 4000);
+            };
+
+            const handleLogout = () => {
+                api.setToken(null);
+                window.location.href = 'auth.html';
+            };
+
+            const handleCreateEvent = async (name) => {
+                try {
+                    await api.request(`/api/projects/${projectName}/events`, { method: 'POST', body: JSON.stringify({ event_name: name }) });
+                    showToast(`Event "${name}" created`);
+                    setShowNewEventModal(false);
+                    refreshProjectView();
+                } catch (err) {
+                    showToast('Failed to create event', 'error');
+                }
+            };
+
+            const handleDeleteProject = async (pName) => {
+                const confirmed = confirm(`Are you absolutely sure you want to delete "${pName}"? This will delete all events and metrics. This cannot be undone.`);
+                if (!confirmed) return;
+                try {
+                    await api.request(`/api/projects/${pName}`, { method: 'DELETE' });
+                    showToast(`Project "${pName}" deleted`);
+                    setTimeout(() => window.location.href = 'index.html', 1000);
+                } catch (err) {
+                    showToast('Failed to delete project', 'error');
+                }
+            };
+
+            const approveEvent = async (eName) => {
+                try {
+                    await api.request(`/api/projects/${projectName}/events/${eName}/approve`, { method: 'POST' });
+                    showToast('Event approved and tracking started');
+                    refreshProjectView();
+                } catch (err) {
+                    showToast('Failed to approve event', 'error');
+                }
+            };
+
+            const deleteEvent = async (eName) => {
+                if (!confirm('Permanently delete this event and its history?')) return;
+                try {
+                    await api.request(`/api/projects/${projectName}/events/${eName}`, { method: 'DELETE' });
+                    refreshProjectView();
+                } catch (err) {
+                    showToast('Failed to delete event', 'error');
+                }
+            };
+
+            const generateKey = async () => {
+                try {
+                    await api.request(`/api/projects/${projectName}/keys`, { method: 'POST', body: JSON.stringify({}) });
+                    refreshProjectView();
+                } catch (err) {
+                    showToast('Failed to generate key', 'error');
+                }
+            };
+
+            const togglePublicBadge = async (eName, isCurrentlyPublic) => {
+                try {
+                    await api.request(`/api/projects/${projectName}/events/${eName}/public`, {
+                        method: 'POST',
+                        body: JSON.stringify({ isPublic: !isCurrentlyPublic })
+                    });
+                    showToast(!isCurrentlyPublic ? 'Public badge enabled' : 'Public badge disabled');
+                    refreshProjectView();
+                    if (inspectModal && inspectModal.event_name === eName) {
+                        setInspectModal({ ...inspectModal, public_event: !isCurrentlyPublic });
+                    }
+                } catch (err) {
+                    showToast('Failed to toggle public status', 'error');
+                }
+            };
+
+            const openStats = async (eName, days = 30) => {
+                try {
+                    const data = await api.request(`/api/projects/${projectName}/events/${eName}/stats?days=${days}`);
+                    setStatsModal({ eventName: eName, data, days });
+                } catch (err) {
+                    showToast('Failed to load stats', 'error');
+                }
+            };
+
+            const copyToClipboard = (text) => {
+                navigator.clipboard.writeText(text);
+                showToast('Copied to clipboard');
+            };
+
+            if (loading) return (
+                <div className="h-screen flex items-center justify-center bg-slate-950">
+                    <div className="animate-spin text-blue-500"><Icon name="loader-2" size={40} /></div>
+                </div>
+            );
+
+            return (
+                <div className="flex h-screen bg-slate-950 text-slate-200 font-sans overflow-hidden">
+                    <Sidebar activeView="projects" user={user} onLogout={handleLogout} />
+
+                    <div className="flex-1 flex flex-col min-w-0 relative">
+                        <Breadcrumb view="project-detail" subView={subView} project={selectedProject} />
+
+                        <main className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+                            <div className="max-w-7xl mx-auto">
+                                <ProjectDetail 
+                                    project={selectedProject}
+                                    subView={subView}
+                                    setSubView={setSubView}
+                                    events={events}
+                                    keys={keys}
+                                    overview={overview}
+                                    onApprove={approveEvent}
+                                    onDeleteEvent={deleteEvent}
+                                    onTogglePublic={togglePublicBadge}
+                                    onInspect={(e) => setInspectModal(e)}
+                                    onStats={openStats}
+                                    onNewEvent={() => setShowNewEventModal(true)}
+                                    onGenerateKey={generateKey}
+                                    onDeleteProject={handleDeleteProject}
+                                    onCopy={copyToClipboard}
+                                />
+                            </div>
+                        </main>
+                    </div>
+
+                    <StatsModal 
+                        isOpen={!!statsModal}
+                        data={statsModal?.data || {}}
+                        eventName={statsModal?.eventName}
+                        days={statsModal?.days}
+                        onClose={() => setStatsModal(null)}
+                        onRefresh={openStats}
+                    />
+
+                    <NewEventModal 
+                        isOpen={showNewEventModal}
+                        onClose={() => setShowNewEventModal(false)}
+                        onSubmit={handleCreateEvent}
+                        projectName={projectName}
+                    />
+
+                    <EventInspectModal 
+                        event={inspectModal}
+                        onClose={() => setInspectModal(null)}
+                        onCopy={copyToClipboard}
+                        onTogglePublic={togglePublicBadge}
+                        apiBase={API_BASE}
+                    />
+
+                    {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<Project />);
+    </script>
+</body>
+</html>

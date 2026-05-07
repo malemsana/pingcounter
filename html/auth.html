@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ping Counter | Login</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="/assets/js/api.js"></script>
+    <script type="text/babel" src="/assets/js/components.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap');
+        body { font-family: 'Plus Jakarta Sans', sans-serif; }
+        .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    </style>
+</head>
+<body class="bg-[#0b1120] text-slate-50 selection:bg-blue-500/30">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        function Auth() {
+            const [toast, setToast] = useState(null);
+
+            useEffect(() => {
+                if (api.getToken()) {
+                    window.location.href = 'index.html';
+                }
+            }, []);
+
+            const showToast = (message, type = 'success') => {
+                setToast({ message, type });
+                setTimeout(() => setToast(null), 4000);
+            };
+
+            const handleLogin = async (e) => {
+                e.preventDefault();
+                try {
+                    const res = await fetch(`${API_BASE}/auth/login`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email: e.target.email.value, password: e.target.password.value })
+                    });
+                    const data = await res.json();
+                    if (data.token) {
+                        api.setToken(data.token);
+                        window.location.href = 'index.html';
+                    } else {
+                        showToast(data.error || 'Identity verification failed', 'error');
+                    }
+                } catch (err) {
+                    showToast('Connection error', 'error');
+                }
+            };
+
+            return (
+                <div className="h-screen flex items-center justify-center p-4 bg-slate-950 font-sans">
+                    <div className="max-w-md w-full bg-slate-900 border border-slate-800 p-12 rounded-[2.5rem] shadow-2xl shadow-black">
+                        <div className="flex justify-center mb-10">
+                            <Logo className="h-16" />
+                        </div>
+                        <p className="text-center text-slate-500 font-bold text-[10px] uppercase tracking-[0.2em] mb-12">Universal Event Observability</p>
+                        <form onSubmit={handleLogin} className="space-y-6">
+                            <input name="email" type="email" placeholder="Email Address" required className="w-full px-6 py-4 rounded-2xl bg-slate-950 border border-slate-800 outline-none focus:ring-2 ring-blue-500/50 transition-all font-medium text-slate-200" />
+                            <input name="password" type="password" placeholder="Password" required className="w-full px-6 py-4 rounded-2xl bg-slate-950 border border-slate-800 outline-none focus:ring-2 ring-blue-500/50 transition-all font-medium text-slate-200" />
+                            <button className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black hover:bg-blue-500 transition shadow-xl shadow-blue-900/20 uppercase tracking-widest text-xs mt-4">Authenticate</button>
+                        </form>
+                    </div>
+                    {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<Auth />);
+    </script>
+</body>
+</html>

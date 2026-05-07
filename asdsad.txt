@@ -1,0 +1,358 @@
+require('dotenv').config();
+const fastify = require('fastify')({ logger: false });
+const { Pool } = require('pg');
+const Redis = require('ioredis');
+const NodeCache = require('node-cache');
+const crypto = require('crypto');
+
+/** * --- CONFIGURATION ---
+ * Set these in your .env file or replace the 'process.env' calls with strings 
+ */
+function getSanitizedRedisUrl() {
+  let url = process.env.REDIS_URL || 'redis://default:gQAAAAAAAQeRAAIncDJhZWRiNGNjZDllNDY0MzE1OWJjOGEwOTYyZmZjYjk2NnAyNjc0NzM@fluent-chimp-67473.upstash.io:6379';
+  url = url.replace('--tls', '').replace('-u', '').trim();
+  if (url.includes('upstash.io') && url.startsWith('redis://')) {
+    url = url.replace('redis://', 'rediss://');
+  }
+  return url;
+}
+
+const config = {
+  port: process.env.PORT || 3000,
+  postgres: process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_Wvxo1yK9XOAe@ep-solitary-breeze-a8g3ekc4-pooler.eastus2.azure.neon.tech/neondb?sslmode=require&channel_binding=require', 
+  redis: getSanitizedRedisUrl(),
+  shards: 4,
+  flushInterval: 60000, // 1 minute
+};
+
+// --- Clients ---
+fastify.register(require('@fastify/cors'), { origin: true });
+
+const pg = new Pool({ 
+  connectionString: config.postgres,
+  ssl: (config.postgres && !config.postgres.includes('localhost')) ? { rejectUnauthorized: false } : false 
+});
+
+const redis = new Redis(config.redis);
+redis.on('error', (err) => console.error('[Redis Error]', err.message));
+
+// --- Caches ---
+const identityCache = new NodeCache({ stdTTL: 3600 });
+const publicCache = new NodeCache({ stdTTL: 300 });
+const slugCache = new NodeCache({ stdTTL: 300 });
+
+// --- Regex Definitions ---
+const apiKeyRegex = /^pc_[a-zA-Z0-9]{32,128}$/;
+const nameRegex = /^[a-zA-Z0-9_-]{1,64}$/;
+const slugRegex = /^[a-zA-Z0-9_-]{1,128}$/;
+
+// --- Logic Helpers ---
+
+function hashPassword(password) {
+  return crypto.scryptSync(password, 'pingcounter_salt', 64).toString('hex');
+}
+
+async function authenticate(request, reply) {
+  const authHeader = request.headers['authorization'];
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    reply.status(401).send({ error: 'Unauthorized' });
+    return null;
+  }
+  const token = authHeader.split(' ')[1];
+  const userId = await redis.get(`session:${token}`);
+  if (!userId) {
+    reply.status(401).send({ error: 'Unauthorized' });
+    return null;
+  }
+  return userId;
+}
+
+async function resolveIdentity(apiKey, projectName, eventName) {
+  const cacheKey = `${apiKey}:${projectName}:${eventName}`;
+  let cached = identityCache.get(cacheKey);
+  if (cached) return cached;
+
+  const keyRes = await pg.query('SELECT user_id FROM api_keys WHERE key = $1', [apiKey]);
+  if (keyRes.rows.length === 0) return null;
+  const userId = keyRes.rows[0].user_id;
+
+  const projectRes = await pg.query('SELECT id FROM projects WHERE user_id = $1 AND project_name = $2', [userId, projectName]);
+  if (projectRes.rows.length === 0) return null;
+  const projectId = projectRes.rows[0].id;
+
+  let eventId;
+  const insertRes = await pg.query(
+    'INSERT INTO events (project_id, event_name) VALUES ($1, $2) ON CONFLICT (project_id, event_name) DO NOTHING RETURNING id',
+    [projectId, eventName]
+  );
+  
+  if (insertRes.rows.length > 0) {
+    eventId = insertRes.rows[0].id;
+  } else {
+    const selectRes = await pg.query('SELECT id FROM events WHERE project_id = $1 AND event_name = $2', [projectId, eventName]);
+    eventId = selectRes.rows[0].id;
+  }
+
+  const identity = { userId, projectId, eventId };
+  identityCache.set(cacheKey, identity);
+  return identity;
+}
+
+async function getEventTotals(eventId, eventName) {
+  const histRes = await pg.query('SELECT SUM(count) as total FROM counters WHERE event_id = $1', [eventId]);
+  const historyTotal = parseInt(histRes.rows[0].total || 0);
+
+  const today = new Date().toISOString().split('T')[0];
+  const shardKeys = Array.from({ length: config.shards }, (_, i) => `event:${eventId}:${today}:${i}`);
+  const shardValues = await redis.mget(...shardKeys);
+  const liveToday = shardValues.reduce((acc, val) => acc + parseInt(val || 0), 0);
+
+  return { event: eventName, total: historyTotal + liveToday, today_live: liveToday };
+}
+
+function generateBadgeSVG(label, value) {
+  const formattedValue = value >= 1000 ? (value / 1000).toFixed(1) + 'k' : value;
+  const labelWidth = label.length * 7 + 10;
+  const valueWidth = formattedValue.toString().length * 8 + 10;
+  const totalWidth = labelWidth + valueWidth;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${totalWidth}" height="20">
+    <linearGradient id="b" x2="0" y2="100%"><stop offset="0" stop-color="#bbb" stop-opacity=".1"/><stop offset="1" stop-opacity=".1"/></linearGradient>
+    <mask id="a"><rect width="${totalWidth}" height="20" rx="3" fill="#fff"/></mask>
+    <g mask="url(#a)"><path fill="#555" d="M0 0h${labelWidth}v20H0z"/><path fill="#4c1" d="M${labelWidth} 0h${valueWidth}v20H${labelWidth}z"/><path fill="url(#b)" d="M0 0h${totalWidth}v20H0z"/></g>
+    <g fill="#fff" text-anchor="middle" font-family="Verdana,sans-serif" font-size="11">
+      <text x="${labelWidth / 2}" y="14" fill="#010101" fill-opacity=".3">${label}</text><text x="${labelWidth / 2}" y="13">${label}</text>
+      <text x="${labelWidth + valueWidth / 2}" y="14" fill="#010101" fill-opacity=".3">${formattedValue}</text><text x="${labelWidth + valueWidth / 2}" y="13">${formattedValue}</text>
+    </g></svg>`;
+}
+
+// --- Routes ---
+
+fastify.get('/', async () => ({ status: 'online', version: '1.2.0' }));
+
+// PING ROUTES (GET & POST)
+const handlePing = async (request, reply) => {
+  const { api_key, project, event } = request.params;
+  
+  // Security: Validate inputs before querying database
+  if (!apiKeyRegex.test(api_key) || !nameRegex.test(project) || !nameRegex.test(event)) {
+    return reply.status(400).send({ error: 'Invalid URL format' });
+  }
+
+  const identity = await resolveIdentity(api_key, project, event);
+  if (!identity) return reply.status(401).send({ error: 'Unauthorized' });
+  
+  const date = new Date().toISOString().split('T')[0];
+  const shard = Math.floor(Math.random() * config.shards);
+  const key = `event:${identity.eventId}:${date}:${shard}`;
+  await redis.incr(key);
+  await redis.expire(key, 172800);
+  return reply.status(204).send();
+};
+
+fastify.get('/p/:api_key/:project/:event', handlePing);
+fastify.post('/p/:api_key/:project/:event', handlePing);
+
+// BADGE ROUTES
+fastify.get('/badge/:project/:event', async (request, reply) => {
+  const { project, event } = request.params;
+  
+  const cacheKey = `badge:${project}:${event}`;
+  let svg = publicCache.get(cacheKey);
+
+  if (!svg) {
+    const res = await pg.query(
+      'SELECT e.id FROM events e JOIN projects p ON e.project_id = p.id WHERE p.project_name = $1 AND e.event_name = $2 AND e.public_event = true',
+      [project, event]
+    );
+    if (res.rows.length === 0) return reply.status(404).send();
+    const stats = await getEventTotals(res.rows[0].id, event);
+    svg = generateBadgeSVG(event, stats.total);
+    publicCache.set(cacheKey, svg);
+  }
+  
+  reply.header('Content-Type', 'image/svg+xml').header('Cache-Control', 'public, max-age=60').send(svg);
+});
+
+fastify.get('/badge/slug/:slug', async (request, reply) => {
+  const { slug } = request.params;
+
+  const cacheKey = `badge_slug:${slug}`;
+  let svg = slugCache.get(cacheKey);
+
+  if (!svg) {
+    const res = await pg.query('SELECT id, event_name FROM events WHERE public_slug = $1 AND public_event = true', [slug]);
+    if (res.rows.length === 0) return reply.status(404).send();
+    const stats = await getEventTotals(res.rows[0].id, res.rows[0].event_name);
+    svg = generateBadgeSVG(res.rows[0].event_name, stats.total);
+    slugCache.set(cacheKey, svg);
+  }
+
+  reply.header('Content-Type', 'image/svg+xml').header('Cache-Control', 'public, max-age=60').send(svg);
+});
+
+// PUBLIC JSON ROUTES (Required by Dashboard Docs)
+fastify.get('/public/:project/:event', async (request, reply) => {
+  const { project, event } = request.params;
+  const res = await pg.query(
+    'SELECT e.id FROM events e JOIN projects p ON e.project_id = p.id WHERE p.project_name = $1 AND e.event_name = $2 AND e.public_event = true',
+    [project, event]
+  );
+  if (res.rows.length === 0) return reply.status(404).send({ error: 'Not found or not public' });
+  return await getEventTotals(res.rows[0].id, event);
+});
+
+fastify.get('/public/slug/:slug', async (request, reply) => {
+  const { slug } = request.params;
+  const res = await pg.query('SELECT id, event_name FROM events WHERE public_slug = $1 AND public_event = true', [slug]);
+  if (res.rows.length === 0) return reply.status(404).send({ error: 'Not found or not public' });
+  return await getEventTotals(res.rows[0].id, res.rows[0].event_name);
+});
+
+// AUTH
+fastify.post('/auth/register', async (request, reply) => {
+  const { email, password } = request.body;
+  const hashed = hashPassword(password);
+  try {
+    const res = await pg.query('INSERT INTO users (email, password_hash) VALUES ($1, $2) RETURNING id, email', [email, hashed]);
+    const token = crypto.randomBytes(32).toString('hex');
+    await redis.setex(`session:${token}`, 86400, res.rows[0].id);
+    return { token, user: res.rows[0] };
+  } catch (e) { return reply.status(409).send({ error: 'Email already registered' }); }
+});
+
+fastify.post('/auth/login', async (request, reply) => {
+  const { email, password } = request.body;
+  const hashed = hashPassword(password);
+  const res = await pg.query('SELECT id, email FROM users WHERE email = $1 AND password_hash = $2', [email, hashed]);
+  if (res.rows.length === 0) return reply.status(401).send({ error: 'Invalid email or password' });
+  const token = crypto.randomBytes(32).toString('hex');
+  await redis.setex(`session:${token}`, 86400, res.rows[0].id);
+  return { token, user: res.rows[0] };
+});
+
+// MANAGEMENT API
+fastify.get('/api/me', async (request, reply) => {
+  const userId = await authenticate(request, reply);
+  if (!userId) return;
+  const res = await pg.query('SELECT id, email FROM users WHERE id = $1', [userId]);
+  return res.rows[0];
+});
+
+fastify.get('/api/projects', async (request, reply) => {
+  const userId = await authenticate(request, reply);
+  if (!userId) return;
+  const res = await pg.query('SELECT id, project_name FROM projects WHERE user_id = $1', [userId]);
+  return res.rows;
+});
+
+fastify.post('/api/projects', async (request, reply) => {
+  const userId = await authenticate(request, reply);
+  if (!userId) return;
+  
+  const name = request.body.name;
+  if (!nameRegex.test(name)) return reply.status(400).send({ error: 'Invalid project name format' });
+
+  try {
+    const res = await pg.query('INSERT INTO projects (user_id, project_name) VALUES ($1, $2) RETURNING id, project_name', [userId, name]);
+    return res.rows[0];
+  } catch (err) {
+    return reply.status(409).send({ error: 'Project name already exists' });
+  }
+});
+
+fastify.get('/api/projects/:project/events', async (request, reply) => {
+  const userId = await authenticate(request, reply);
+  if (!userId) return;
+  const res = await pg.query(
+    'SELECT e.* FROM events e JOIN projects p ON e.project_id = p.id WHERE p.user_id = $1 AND p.project_name = $2',
+    [userId, request.params.project]
+  );
+  return res.rows;
+});
+
+fastify.post('/api/projects/:project/events/:event/public', async (request, reply) => {
+  const userId = await authenticate(request, reply);
+  if (!userId) return;
+  const { enabled, slug } = request.body;
+  await pg.query(
+    `UPDATE events e SET public_event = $1, public_slug = $2 
+     FROM projects p WHERE e.project_id = p.id AND p.user_id = $3 AND p.project_name = $4 AND e.event_name = $5`,
+    [enabled, slug || null, userId, request.params.project, request.params.event]
+  );
+  return { success: true };
+});
+
+fastify.get('/api/keys', async (request, reply) => {
+  const userId = await authenticate(request, reply);
+  if (!userId) return;
+  const res = await pg.query('SELECT key, created_at FROM api_keys WHERE user_id = $1', [userId]);
+  return res.rows;
+});
+
+fastify.post('/api/keys', async (request, reply) => {
+  const userId = await authenticate(request, reply);
+  if (!userId) return;
+  const key = `pc_${crypto.randomBytes(32).toString('hex')}`;
+  await pg.query('INSERT INTO api_keys (user_id, key) VALUES ($1, $2)', [userId, key]);
+  return { key };
+});
+
+fastify.get('/api/projects/:project/events/:event/history', async (request, reply) => {
+  const userId = await authenticate(request, reply);
+  if (!userId) return;
+  const res = await pg.query(
+    `SELECT c.date, c.count FROM counters c JOIN events e ON c.event_id = e.id JOIN projects p ON e.project_id = p.id 
+     WHERE p.user_id = $1 AND p.project_name = $2 AND e.event_name = $3 ORDER BY c.date ASC LIMIT 30`,
+    [userId, request.params.project, request.params.event]
+  );
+  return res.rows;
+});
+
+fastify.get('/api/projects/:project/events/:event/stats', async (request, reply) => {
+  const userId = await authenticate(request, reply);
+  if (!userId) return;
+  const eventRes = await pg.query(
+    'SELECT e.id FROM events e JOIN projects p ON e.project_id = p.id WHERE p.user_id = $1 AND p.project_name = $2 AND e.event_name = $3',
+    [userId, request.params.project, request.params.event]
+  );
+  if (eventRes.rows.length === 0) return reply.status(404).send();
+  return await getEventTotals(eventRes.rows[0].id, request.params.event);
+});
+
+// --- Worker ---
+async function runWorker() {
+  try {
+    let cursor = '0';
+    const activeData = new Map();
+    do {
+      const [nextCursor, keys] = await redis.scan(cursor, 'MATCH', 'event:*:*:*', 'COUNT', 500);
+      cursor = nextCursor;
+      for (const key of keys) {
+        const val = await redis.getset(key, 0);
+        const count = parseInt(val || 0);
+        if (count > 0) {
+          const parts = key.split(':');
+          const compositeKey = `${parts[1]}|${parts[2]}`;
+          activeData.set(compositeKey, (activeData.get(compositeKey) || 0) + count);
+        }
+      }
+    } while (cursor !== '0');
+    for (const [composite, total] of activeData.entries()) {
+      const [eventId, date] = composite.split('|');
+      await pg.query(
+        'INSERT INTO counters (event_id, date, count) VALUES ($1, $2, $3) ON CONFLICT (event_id, date) DO UPDATE SET count = counters.count + EXCLUDED.count',
+        [eventId, date, total]
+      );
+    }
+  } catch (err) { console.error('Worker Error:', err); }
+  setTimeout(runWorker, config.flushInterval);
+}
+
+async function start() {
+  try {
+    await fastify.listen({ port: config.port, host: '0.0.0.0' });
+    console.log(`Ping Counter API listening on ${config.port}`);
+    runWorker();
+  } catch (err) { process.exit(1); }
+}
+start();

@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ping Counter | Settings</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="/assets/js/api.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap');
+        body { font-family: 'Plus Jakarta Sans', sans-serif; }
+        .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body class="bg-[#0b1120] text-slate-50 selection:bg-blue-500/30">
+    <div id="root"></div>
+
+    <script type="text/babel" src="/assets/js/components.js"></script>
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const AccountSettings = ({ user, usage, updateProfile, updatePassword }) => (
+            <div className="animate-fade-in max-w-4xl mx-auto space-y-12">
+                <header className="mb-12">
+                    <h2 className="text-4xl font-black text-slate-50 uppercase tracking-tighter leading-tight">Account Parameters</h2>
+                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mt-2">Manage identity and infrastructure usage</p>
+                </header>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <section className="bg-slate-950 border border-slate-800 p-10 rounded-[3rem] shadow-sm relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-bl-[100px] pointer-events-none"></div>
+                        <h3 className="font-black text-slate-100 uppercase tracking-widest text-xs mb-8 flex items-center gap-2"><Icon name="user" size={16} className="text-blue-400" /> Identity Profile</h3>
+                        <form onSubmit={updateProfile} className="space-y-6">
+                            <div>
+                                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Administrator Name</label>
+                                <input name="fullName" type="text" defaultValue={user.full_name} placeholder="e.g. System Admin" className="w-full bg-slate-900 border border-slate-800 rounded-2xl px-5 py-4 text-slate-100 font-bold outline-none focus:ring-2 ring-blue-500/40 transition-all placeholder:text-slate-700" />
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Authentication Email</label>
+                                <input type="email" value={user.email} disabled className="w-full bg-slate-900/50 border border-slate-800 rounded-2xl px-5 py-4 text-slate-500 font-bold opacity-50 cursor-not-allowed" />
+                            </div>
+                            <button className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-blue-700 transition shadow-xl shadow-blue-500/20">Sync Profile</button>
+                        </form>
+                    </section>
+
+                    <section className="bg-slate-950 border border-slate-800 p-10 rounded-[3rem] shadow-sm relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-bl-[100px] pointer-events-none"></div>
+                        <h3 className="font-black text-slate-100 uppercase tracking-widest text-xs mb-8 flex items-center gap-2"><Icon name="shield" size={16} className="text-emerald-400" /> Security Credential</h3>
+                        <form onSubmit={updatePassword} className="space-y-6">
+                            <div>
+                                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Current Access Key</label>
+                                <input name="currentPassword" type="password" required className="w-full bg-slate-900 border border-slate-800 rounded-2xl px-5 py-4 text-slate-100 font-bold outline-none focus:ring-2 ring-emerald-500/40 transition-all" />
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">New Access Key</label>
+                                <input name="newPassword" type="password" required className="w-full bg-slate-900 border border-slate-800 rounded-2xl px-5 py-4 text-slate-100 font-bold outline-none focus:ring-2 ring-emerald-500/40 transition-all" />
+                            </div>
+                            <button className="w-full py-4 bg-slate-800 text-emerald-400 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-emerald-500 hover:text-white transition border border-emerald-500/20 shadow-lg shadow-emerald-500/10">Rotate Credential</button>
+                        </form>
+                    </section>
+                </div>
+
+                <section className="bg-slate-900 border border-slate-800 p-12 rounded-[3rem] shadow-inner relative overflow-hidden">
+                    <div className="flex justify-between items-end mb-10">
+                        <div>
+                            <h3 className="font-black text-slate-100 uppercase tracking-widest text-xs flex items-center gap-2"><Icon name="cpu" size={16} className="text-purple-400" /> Infrastructure Usage</h3>
+                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-2">Current billing cycle telemetry</p>
+                        </div>
+                        <div className="text-[10px] font-black bg-purple-500/10 text-purple-400 px-4 py-2 rounded-xl border border-purple-500/20 uppercase tracking-widest">Free Tier Allocations</div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div className="bg-slate-950 p-8 rounded-3xl border border-slate-800">
+                            <div className="flex justify-between items-center mb-6">
+                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Global Pings</span>
+                                <Icon name="activity" size={16} className="text-slate-600" />
+                            </div>
+                            <div className="text-4xl font-black text-white tracking-tighter mb-2">{usage.total_pings.toLocaleString()}</div>
+                            <div className="w-full bg-slate-900 rounded-full h-1.5 overflow-hidden">
+                                <div className="bg-purple-500 h-1.5 rounded-full" style={{ width: `${Math.min((usage.total_pings / 100000) * 100, 100)}%` }}></div>
+                            </div>
+                            <div className="text-[9px] font-bold text-slate-600 uppercase tracking-widest mt-3 text-right">100k Limit</div>
+                        </div>
+                        <div className="bg-slate-950 p-8 rounded-3xl border border-slate-800">
+                            <div className="flex justify-between items-center mb-6">
+                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Workspaces</span>
+                                <Icon name="folder" size={16} className="text-slate-600" />
+                            </div>
+                            <div className="text-4xl font-black text-white tracking-tighter mb-2">{usage.total_projects} <span className="text-slate-600 text-lg">/ 3</span></div>
+                            <div className="w-full bg-slate-900 rounded-full h-1.5 overflow-hidden">
+                                <div className="bg-blue-500 h-1.5 rounded-full" style={{ width: `${(usage.total_projects / 3) * 100}%` }}></div>
+                            </div>
+                        </div>
+                        <div className="bg-slate-950 p-8 rounded-3xl border border-slate-800">
+                            <div className="flex justify-between items-center mb-6">
+                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Active Events</span>
+                                <Icon name="zap" size={16} className="text-slate-600" />
+                            </div>
+                            <div className="text-4xl font-black text-white tracking-tighter mb-2">{usage.total_events} <span className="text-slate-600 text-lg">/ 10</span></div>
+                            <div className="w-full bg-slate-900 rounded-full h-1.5 overflow-hidden">
+                                <div className="bg-emerald-500 h-1.5 rounded-full" style={{ width: `${(usage.total_events / 10) * 100}%` }}></div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        );
+
+        function Settings() {
+            const [user, setUser] = useState(null);
+            const [accountUsage, setAccountUsage] = useState(null);
+            const [loading, setLoading] = useState(true);
+            const [toast, setToast] = useState(null);
+
+            useEffect(() => {
+                if (!api.getToken()) {
+                    window.location.href = 'auth.html';
+                } else {
+                    fetchData();
+                }
+            }, []);
+
+            const fetchData = async () => {
+                setLoading(true);
+                try {
+                    const u = await api.request('/api/me');
+                    setUser(u);
+                    const usage = await api.request('/api/account/usage');
+                    setAccountUsage(usage);
+                } catch (err) {
+                    showToast('Failed to load settings data', 'error');
+                }
+                setLoading(false);
+            };
+
+            const showToast = (message, type = 'success') => {
+                setToast({ message, type });
+                setTimeout(() => setToast(null), 4000);
+            };
+
+            const handleLogout = () => {
+                api.setToken(null);
+                window.location.href = 'auth.html';
+            };
+
+            const updateProfile = async (e) => {
+                e.preventDefault();
+                try {
+                    await api.request('/api/account/profile', { method: 'POST', body: JSON.stringify({ full_name: e.target.fullName.value }) });
+                    fetchData();
+                    showToast('Profile updated');
+                } catch (err) {
+                    showToast('Failed to update profile', 'error');
+                }
+            };
+
+            const updatePassword = async (e) => {
+                e.preventDefault();
+                try {
+                    await api.request('/api/account/password', { method: 'POST', body: JSON.stringify({ currentPassword: e.target.currentPassword.value, newPassword: e.target.newPassword.value }) });
+                    showToast('Password updated successfully');
+                    e.target.reset();
+                } catch (err) {
+                    showToast('Failed to update password', 'error');
+                }
+            };
+
+            if (loading) return (
+                <div className="h-screen flex items-center justify-center bg-slate-950">
+                    <div className="animate-spin text-blue-500"><Icon name="loader-2" size={40} /></div>
+                </div>
+            );
+
+            return (
+                <div className="flex h-screen bg-slate-950 text-slate-200 font-sans overflow-hidden">
+                    <Sidebar activeView="account" user={user} onLogout={handleLogout} />
+
+                    <div className="flex-1 flex flex-col min-w-0 relative">
+                        <Breadcrumb view="account" />
+
+                        <main className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+                            <div className="max-w-7xl mx-auto">
+                                <AccountSettings 
+                                    user={user} 
+                                    usage={accountUsage} 
+                                    updateProfile={updateProfile}
+                                    updatePassword={updatePassword}
+                                />
+                            </div>
+                        </main>
+                    </div>
+
+                    {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<Settings />);
+    </script>
+</body>
+</html>

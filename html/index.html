@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ping Counter | Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="/assets/js/api.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap');
+        body { font-family: 'Plus Jakarta Sans', sans-serif; }
+        .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
+        .animate-slide-up { animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body class="bg-[#0b1120] text-slate-50 selection:bg-blue-500/30">
+    <div id="root"></div>
+
+    <script type="text/babel" src="/assets/js/components.js"></script>
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const ProjectList = ({ projects, onSelect, onCreateClick }) => (
+            <div className="animate-fade-in mt-6">
+                <div className="flex justify-between items-center mb-10">
+                    <div>
+                        <h2 className="text-3xl font-black tracking-tighter uppercase text-slate-50">Projects</h2>
+                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mt-1">Manage your tracking workspaces</p>
+                    </div>
+                    <button 
+                        onClick={onCreateClick}
+                        className="bg-blue-600 text-white px-6 py-3 rounded-2xl font-black text-xs flex items-center gap-2 hover:bg-blue-700 transition shadow-xl shadow-blue-500/20 uppercase tracking-widest border border-blue-400/30"
+                    >
+                        <Icon name="plus" size={16} /> New Project
+                    </button>
+                </div>
+                
+                <div className="bg-slate-950 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
+                    <table className="w-full text-left text-sm">
+                        <thead>
+                            <tr className="bg-slate-900 border-b border-slate-800 text-[10px] font-black uppercase text-slate-500 tracking-widest">
+                                <th className="px-8 py-5">Project Workspace</th>
+                                <th className="px-8 py-5">Status</th>
+                                <th className="px-8 py-5 text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/50">
+                            {projects.map(p => (
+                                <tr key={p.id} className="hover:bg-slate-900/50 transition-colors group cursor-pointer" onClick={() => onSelect(p)}>
+                                    <td className="px-8 py-6">
+                                        <div className="flex items-center gap-4">
+                                            <div className="bg-slate-800 p-3 rounded-xl text-slate-400 group-hover:text-blue-400 group-hover:bg-blue-600/10 transition-all">
+                                                <Icon name="folder" size={20} />
+                                            </div>
+                                            <div>
+                                                <div className="font-black text-slate-100 uppercase tracking-tight text-base">{p.project_name}</div>
+                                                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">ID: {p.id}</div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td className="px-8 py-6">
+                                        <span className="flex items-center gap-2 text-[10px] font-black text-emerald-500 uppercase tracking-widest">
+                                            <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span> Active
+                                        </span>
+                                    </td>
+                                    <td className="px-8 py-6 text-right">
+                                        <button className="bg-slate-800 hover:bg-blue-600 text-slate-400 hover:text-white p-2.5 rounded-xl transition border border-slate-700/50 shadow-sm">
+                                            <Icon name="chevron-right" size={18} />
+                                        </button>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        );
+
+        function Dashboard() {
+            const [user, setUser] = useState(null);
+            const [projects, setProjects] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [toast, setToast] = useState(null);
+            const [showCreateModal, setShowCreateModal] = useState(false);
+            const [newProjectName, setNewProjectName] = useState('');
+
+            useEffect(() => {
+                if (!api.getToken()) {
+                    window.location.href = 'auth.html';
+                } else {
+                    fetchData();
+                }
+            }, []);
+
+            const fetchData = async () => {
+                setLoading(true);
+                try {
+                    const u = await api.request('/api/me');
+                    setUser(u);
+                    const p = await api.request('/api/projects');
+                    setProjects(p);
+                } catch (err) {
+                    showToast('Failed to load dashboard data', 'error');
+                }
+                setLoading(false);
+            };
+
+            const handleLogout = () => {
+                api.setToken(null);
+                window.location.href = 'auth.html';
+            };
+
+            const showToast = (message, type = 'success') => {
+                setToast({ message, type });
+                setTimeout(() => setToast(null), 4000);
+            };
+
+            const handleCreateProject = async (e) => {
+                e.preventDefault();
+                const name = newProjectName.trim();
+                if (!name) return;
+                try {
+                    await api.request('/api/projects', { method: 'POST', body: JSON.stringify({ name }) });
+                    setNewProjectName('');
+                    setShowCreateModal(false);
+                    showToast('Project created successfully');
+                    fetchData();
+                } catch (err) {
+                    showToast('Failed to create project', 'error');
+                }
+            };
+
+            if (loading) return (
+                <div className="h-screen flex items-center justify-center bg-slate-950">
+                    <div className="animate-spin text-blue-500"><Icon name="loader-2" size={40} /></div>
+                </div>
+            );
+
+            return (
+                <div className="flex h-screen bg-slate-950 text-slate-200 font-sans overflow-hidden">
+                    <Sidebar activeView="projects" user={user} onLogout={handleLogout} />
+
+                    <div className="flex-1 flex flex-col min-w-0 relative">
+                        <Breadcrumb view="projects" />
+
+                        <main className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+                            <div className="max-w-7xl mx-auto">
+                                <ProjectList 
+                                    projects={projects} 
+                                    onSelect={(p) => window.location.href = `project.html?name=${p.project_name}`} 
+                                    onCreateClick={() => setShowCreateModal(true)} 
+                                />
+                            </div>
+                        </main>
+                    </div>
+
+                    {showCreateModal && (
+                        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 animate-fade-in">
+                            <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setShowCreateModal(false)}></div>
+                            <div className="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-[2.5rem] p-12 relative z-10 shadow-2xl animate-slide-up">
+                                <div className="mb-10">
+                                    <h3 className="text-3xl font-black uppercase tracking-tighter text-white mb-2">Initialize Project</h3>
+                                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Scoped environment for metric aggregation</p>
+                                </div>
+
+                                <form onSubmit={handleCreateProject} className="space-y-8">
+                                    <div>
+                                        <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">Unique Namespace</label>
+                                        <input 
+                                            autoFocus
+                                            type="text" 
+                                            placeholder="e.g. monolith-production"
+                                            value={newProjectName}
+                                            onChange={(e) => setNewProjectName(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'))}
+                                            className="w-full bg-slate-950 border border-slate-800 rounded-2xl px-6 py-4 text-slate-100 font-bold outline-none focus:ring-2 ring-blue-500/50 transition-all placeholder:text-slate-700"
+                                        />
+                                        <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest mt-4">Endpoint Path Pattern: /p/:key/<span className="text-blue-500">{newProjectName || '{slug}'}</span>/:event</p>
+                                    </div>
+                                    
+                                    <div className="flex gap-4">
+                                        <button type="button" onClick={() => setShowCreateModal(false)} className="flex-1 px-8 py-4 rounded-2xl bg-slate-800 text-slate-400 font-black text-xs uppercase tracking-widest hover:bg-slate-700 transition">Cancel</button>
+                                        <button type="submit" disabled={!newProjectName.trim()} className="flex-[2] px-8 py-4 rounded-2xl bg-blue-600 text-white font-black text-xs uppercase tracking-widest hover:bg-blue-500 transition shadow-xl shadow-blue-900/20 disabled:opacity-50">Create Workspace</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+
+                    {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<Dashboard />);
+    </script>
+</body>
+</html>

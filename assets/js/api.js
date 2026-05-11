@@ -24,8 +24,8 @@ const api = {
         } catch (err) {
             if (err.message === 'unauthorized') {
                 api.setToken(null);
-                if (!window.location.pathname.endsWith('auth.html')) {
-                    window.location.href = 'auth.html';
+                if (!window.location.pathname.endsWith('/auth')) {
+                    window.location.href = '/auth';
                 }
             }
             throw err;

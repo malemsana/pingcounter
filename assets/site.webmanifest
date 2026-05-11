@@ -1,19 +1,29 @@
 {
-  "name": "metahtml app",
-  "short_name": "metahtml",
-  "theme_color": "#000000",
-  "background_color": "#000000",
+  "name": "Ping Counter",
+  "short_name": "PingCounter",
+  "description": "Universal Event Observability & Metric Tracking",
+  "start_url": "/",
   "display": "standalone",
+  "background_color": "#09090b",
+  "theme_color": "#3b82f6",
   "icons": [
     {
       "src": "/assets/android-chrome-192x192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
     },
     {
       "src": "/assets/android-chrome-512x512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/maskable-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
     },
     {
       "src": "/assets/maskable-icon-512.png",

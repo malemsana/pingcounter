@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ping Counter | Dashboard</title>
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16x16.png">
+    <link rel="manifest" href="/assets/site.webmanifest">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -96,7 +100,7 @@
 
             useEffect(() => {
                 if (!api.getToken()) {
-                    window.location.href = 'auth.html';
+                    window.location.href = '/auth';
                 } else {
                     fetchData();
                 }
@@ -117,7 +121,7 @@
 
             const handleLogout = () => {
                 api.setToken(null);
-                window.location.href = 'auth.html';
+                window.location.href = '/auth';
             };
 
             const showToast = (message, type = 'success') => {
@@ -157,7 +161,7 @@
                             <div className="max-w-7xl mx-auto">
                                 <ProjectList 
                                     projects={projects} 
-                                    onSelect={(p) => window.location.href = `project.html?name=${p.project_name}`} 
+                                    onSelect={(p) => window.location.href = `/project?name=${p.project_name}`} 
                                     onCreateClick={() => setShowCreateModal(true)} 
                                 />
                             </div>

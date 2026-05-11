@@ -123,7 +123,7 @@
 
             useEffect(() => {
                 if (!api.getToken()) {
-                    window.location.href = 'auth.html';
+                window.location.href = '/auth';
                 } else {
                     fetchData();
                 }
@@ -149,7 +149,7 @@
 
             const handleLogout = () => {
                 api.setToken(null);
-                window.location.href = 'auth.html';
+                window.location.href = '/auth';
             };
 
             const updateProfile = async (e) => {

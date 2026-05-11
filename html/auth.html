@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ping Counter | Login</title>
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16x16.png">
+    <link rel="manifest" href="/assets/site.webmanifest">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -29,7 +33,7 @@
 
             useEffect(() => {
                 if (api.getToken()) {
-                    window.location.href = 'index.html';
+                    window.location.href = '/';
                 }
             }, []);
 
@@ -49,7 +53,7 @@
                     const data = await res.json();
                     if (data.token) {
                         api.setToken(data.token);
-                        window.location.href = 'index.html';
+                        window.location.href = '/';
                     } else {
                         showToast(data.error || 'Identity verification failed', 'error');
                     }

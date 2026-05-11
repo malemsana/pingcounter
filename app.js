@@ -5,6 +5,7 @@ const NodeCache = require('node-cache');
 const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
+const cacheDb = require('./cacheDb');
 
 // Load Badge Templates
 let badgeTemplates = {};
@@ -21,7 +22,7 @@ const config = {
   port: process.env.PORT || 3000,
   postgres: process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_Wvxo1yK9XOAe@ep-solitary-breeze-a8g3ekc4-pooler.eastus2.azure.neon.tech/neondb?sslmode=verify-full',
   shards: 4,
-  flushInterval: 20000
+  flushInterval: 40 * 60 * 1000 // 40 minutes
 };
 
 // --- Clients ---
@@ -59,6 +60,7 @@ fastify.setErrorHandler((error, request, reply) => {
 
 // --- Caches ---
 const identityCache = new NodeCache({ stdTTL: 3600 });
+const eventCacheL1 = new NodeCache({ stdTTL: 3600, maxKeys: 5000 });
 const nameRegex = /^[a-zA-Z0-9_-]{1,64}$/;
 
 // --- Logic Helpers ---
@@ -668,20 +670,44 @@ fastify.delete('/api/projects/:project/events/:event', async (r, rp) => {
 
 // --- Stats Helper ---
 async function getEventData(eid, days = 30) {
-  const totalRes = await pg.query('SELECT SUM(count) as total FROM counters WHERE event_id = $1', [eid]);
-  const historyTotal = parseInt(totalRes.rows[0].total || 0);
-
-  const historyData = await pg.query(`
-    SELECT to_char(date, 'YYYY-MM-DD') as date, count 
-    FROM counters 
-    WHERE event_id = $1 AND date >= CURRENT_DATE - $2::integer
-    ORDER BY date ASC 
-  `, [eid, days - 1]);
-
-  let history = historyData.rows.map(row => ({ date: row.date, count: parseInt(row.count) }));
-
   const today = new Date().toISOString().split('T')[0];
   const live = pingBuffer.get(eid) || 0;
+
+  // L1 Check
+  let baseData = eventCacheL1.get(eid);
+
+  // L2 Check
+  if (!baseData) {
+    baseData = cacheDb.getEvent(eid);
+    if (baseData) {
+      eventCacheL1.set(eid, baseData);
+    }
+  }
+
+  // L3 Check (Database)
+  if (!baseData) {
+    const totalRes = await pg.query('SELECT SUM(count) as total FROM counters WHERE event_id = $1', [eid]);
+    const historyTotal = parseInt(totalRes.rows[0].total || 0);
+
+    const historyData = await pg.query(`
+      SELECT to_char(date, 'YYYY-MM-DD') as date, count 
+      FROM counters 
+      WHERE event_id = $1 AND date >= CURRENT_DATE - 30
+      ORDER BY date ASC 
+    `, [eid]);
+
+    let history = historyData.rows.map(row => ({ date: row.date, count: parseInt(row.count) }));
+    
+    baseData = { total: historyTotal, history };
+    
+    // Save to L2 and L1
+    cacheDb.setEvent(eid, baseData.total, baseData.history);
+    eventCacheL1.set(eid, baseData);
+  }
+
+  // Deep clone history to avoid modifying cache
+  let history = JSON.parse(JSON.stringify(baseData.history));
+  let historyTotal = baseData.total;
 
   const todayIndex = history.findIndex(h => h.date === today);
   const dbToday = todayIndex > -1 ? history[todayIndex].count : 0;
@@ -694,6 +720,12 @@ async function getEventData(eid, days = 30) {
       history.push({ date: today, count: live });
     }
   }
+
+  // Filter for requested days
+  const cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - days);
+  const cutoffStr = cutoffDate.toISOString().split('T')[0];
+  history = history.filter(h => h.date >= cutoffStr);
 
   return { total: historyTotal + live, live_today: live, today_total: todayTotal, history };
 }
@@ -762,6 +794,19 @@ async function runWorker() {
       const today = new Date().toISOString().split('T')[0];
       for (const [eid, count] of batch.entries()) {
         await pg.query('INSERT INTO counters (event_id, date, count) VALUES ($1, $2, $3) ON CONFLICT (event_id, date) DO UPDATE SET count = counters.count + EXCLUDED.count', [eid, today, count]);
+        
+        // Refresh L1/L2 Cache for this event from DB to ensure sync
+        eventCacheL1.del(eid);
+        try {
+          const totalRes = await pg.query('SELECT SUM(count) as total FROM counters WHERE event_id = $1', [eid]);
+          const historyData = await pg.query(`SELECT to_char(date, 'YYYY-MM-DD') as date, count FROM counters WHERE event_id = $1 AND date >= CURRENT_DATE - 30 ORDER BY date ASC`, [eid]);
+          const history = historyData.rows.map(row => ({ date: row.date, count: parseInt(row.count) }));
+          const baseData = { total: parseInt(totalRes.rows[0].total || 0), history };
+          cacheDb.setEvent(eid, baseData.total, baseData.history);
+          eventCacheL1.set(eid, baseData);
+        } catch (dbErr) {
+            console.error('Cache Refresh Error:', dbErr);
+        }
       }
     }
   } catch (e) { console.error('Worker Error:', e); }
@@ -773,12 +818,15 @@ async function gracefulShutdown() {
   console.log('\n[System] Shutting down... flushing ping buffer.');
   if (pingBuffer.size > 0) {
     const today = new Date().toISOString().split('T')[0];
+    const promises = [];
     for (const [eid, count] of pingBuffer.entries()) {
-      try {
-        await pg.query('INSERT INTO counters (event_id, date, count) VALUES ($1, $2, $3) ON CONFLICT (event_id, date) DO UPDATE SET count = counters.count + EXCLUDED.count', [eid, today, count]);
-      } catch (e) { console.error('Shutdown flush error:', e); }
+      const p = pg.query('INSERT INTO counters (event_id, date, count) VALUES ($1, $2, $3) ON CONFLICT (event_id, date) DO UPDATE SET count = counters.count + EXCLUDED.count', [eid, today, count])
+                  .catch(e => console.error('Shutdown flush error:', e));
+      promises.push(p);
     }
+    await Promise.all(promises);
   }
+  cacheDb.close();
   console.log('[System] Shutdown complete.');
   process.exit(0);
 }

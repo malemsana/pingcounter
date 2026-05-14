@@ -86,6 +86,7 @@
                         <li><a href="#ingestion" class="block px-2 py-1.5 text-sm text-zinc-400 hover:text-blue-400 transition">Ingestion (Pings)</a></li>
                         <li><a href="#badges" class="block px-2 py-1.5 text-sm text-zinc-400 hover:text-blue-400 transition">Visual Badges</a></li>
                         <li><a href="#retrieval" class="block px-2 py-1.5 text-sm text-zinc-400 hover:text-blue-400 transition">Data Retrieval</a></li>
+                        <li><a href="#history" class="block px-2 py-1.5 text-sm text-zinc-400 hover:text-blue-400 transition">Historical Stats</a></li>
                     </ul>
                 </div>
                 <div class="space-y-3">
@@ -362,7 +363,14 @@ window.addEventListener('visibilitychange', () => {
                             <code class="text-sm text-zinc-300 font-mono">/api/v1/data/:api_key/:project/:event</code>
                         </div>
                     </div>
-                    <div class="p-6">
+                    <div class="p-6 space-y-6">
+                        <div class="space-y-3">
+                            <h5 class="text-[10px] font-bold text-zinc-500 uppercase tracking-widest px-2">Query Parameters</h5>
+                            <div class="flex justify-between items-center text-sm border-b border-zinc-800/50 pb-2 px-2">
+                                <span class="font-mono text-zinc-400">days</span>
+                                <span class="text-zinc-500 italic">Optional. Number of days to return (default: 30)</span>
+                            </div>
+                        </div>
                         <div class="bg-zinc-900 rounded-xl p-6 font-mono text-[11px] text-zinc-400 overflow-x-auto">
 <pre class="text-emerald-400">{
   "project": "my-site",
@@ -379,6 +387,32 @@ window.addEventListener('visibilitychange', () => {
                         </div>
                     </div>
                 </div>
+
+                <!-- Historical Stats Section -->
+                <div id="history" class="bg-zinc-950 rounded-2xl border border-zinc-800 overflow-hidden mt-8">
+                    <div class="p-4 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/30">
+                        <div class="flex items-center gap-3">
+                            <span class="endpoint-badge get">GET</span>
+                            <code class="text-sm text-zinc-300 font-mono">/api/v1/history/:api_key/:project/:event</code>
+                        </div>
+                    </div>
+                    <div class="p-6 space-y-4">
+                        <h4 class="text-white font-semibold">Historical Time-Series</h4>
+                        <p class="text-sm text-zinc-500 leading-relaxed">
+                            A dedicated endpoint for retrieving only the historical daily counts. 
+                            Ideal for feeding charts and time-series visualizations. Supports the same <code class="text-zinc-300">days</code> parameter as the main data endpoint.
+                        </p>
+                        <div class="bg-zinc-900 rounded-xl p-6 font-mono text-[11px] text-emerald-400 overflow-x-auto">
+<pre>{
+  "history": [
+    { "date": "2026-05-01", "count": 102 },
+    { "date": "2026-05-02", "count": 145 }
+  ]
+}</pre>
+                        </div>
+                    </div>
+                </div>
+
             </section>
 
             <!-- Workflows Section -->

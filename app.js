@@ -1,5 +1,5 @@
 require('dotenv').config({ path: ['.env', '.emv'] });
-const fastify = require('fastify')({ logger: false, trustProxy: true });
+const fastify = require('fastify')({ logger: true, trustProxy: true });
 const { Pool } = require('pg');
 const NodeCache = require('node-cache');
 const crypto = require('crypto');
@@ -141,6 +141,43 @@ async function resolveIdentity(apiKey, projectName, eventName) {
   return identity;
 }
 
+/**
+ * Helper to enforce security rules for API Key requests
+ */
+function validateApiKeyRequest(identity, request, reply, requiredScope = 'read') {
+  if (!identity) {
+    reply.status(401).send({ error: "unauthorized" });
+    return false;
+  }
+
+  // Security: Allowed Origins
+  if (identity.allowedOrigins) {
+    const origin = request.headers['origin'];
+    if (!origin || !identity.allowedOrigins.some(o => origin.includes(o))) {
+      reply.status(403).send({ error: "forbidden", message: "Origin not allowed" });
+      return false;
+    }
+  }
+
+  // Security: Allowed IPs
+  if (identity.allowedIps) {
+    const ip = request.ip;
+    if (!identity.allowedIps.includes(ip)) {
+      reply.status(403).send({ error: "forbidden", message: "IP not allowed" });
+      return false;
+    }
+  }
+
+  // Scopes
+  if (!identity.scopes.includes(requiredScope) && !identity.scopes.includes('admin')) {
+    reply.status(403).send({ error: "forbidden", message: `Key lacks '${requiredScope}' scope` });
+    return false;
+  }
+
+  return true;
+}
+
+
 // --- Public Helpers ---
 const badgeCache = new NodeCache({ stdTTL: 60 });
 
@@ -197,27 +234,7 @@ const handlePing = async (request, reply) => {
   }
 
   const identity = await resolveIdentity(api_key, project, event);
-  if (!identity) return reply.status(401).send({ error: "unauthorized" });
-
-  // Security: Allowed Origins
-  if (identity.allowedOrigins) {
-    const origin = request.headers['origin'];
-    if (!origin || !identity.allowedOrigins.some(o => origin.includes(o))) {
-      return reply.status(403).send({ error: "forbidden", message: "Origin not allowed" });
-    }
-  }
-
-  // Security: Allowed IPs
-  if (identity.allowedIps) {
-    const ip = request.ip;
-    if (!identity.allowedIps.includes(ip)) {
-      return reply.status(403).send({ error: "forbidden", message: "IP not allowed" });
-    }
-  }
-
-  if (!identity.scopes.includes('ping') && !identity.scopes.includes('admin')) {
-    return reply.status(403).send({ error: "forbidden", message: "Key lacks 'ping' scope" });
-  }
+  if (!validateApiKeyRequest(identity, request, reply, 'ping')) return;
 
   // Rate Limiting
   const limit = identity.rateLimit || 60;
@@ -242,27 +259,11 @@ fastify.post('/p/:api_key/:project/:event', handlePing);
 // --- Private Data API ---
 fastify.get('/api/v1/data/:api_key/:project/:event', async (r, rp) => {
   const { api_key, project, event } = r.params;
+  const days = parseInt(r.query.days) || 30;
   const identity = await resolveIdentity(api_key, project, event);
-  if (!identity) return rp.status(401).send({ error: 'unauthorized' });
+  if (!validateApiKeyRequest(identity, r, rp, 'read')) return;
 
-  // Security Rules
-  if (identity.allowedOrigins) {
-    const origin = r.headers['origin'];
-    if (!origin || !identity.allowedOrigins.some(o => origin.includes(o))) {
-      return rp.status(403).send({ error: "forbidden", message: "Origin not allowed" });
-    }
-  }
-  if (identity.allowedIps) {
-    if (!identity.allowedIps.includes(r.ip)) {
-      return rp.status(403).send({ error: "forbidden", message: "IP not allowed" });
-    }
-  }
-
-  if (!identity.scopes.includes('read') && !identity.scopes.includes('admin')) {
-    return rp.status(403).send({ error: 'forbidden', message: "Key lacks 'read' scope" });
-  }
-
-  const data = await getEventData(identity.eventId, 30);
+  const data = await getEventData(identity.eventId, days);
   return {
     project,
     event,
@@ -273,30 +274,24 @@ fastify.get('/api/v1/data/:api_key/:project/:event', async (r, rp) => {
   };
 });
 
+// --- Private History API ---
+fastify.get('/api/v1/history/:api_key/:project/:event', async (r, rp) => {
+  const { api_key, project, event } = r.params;
+  const days = parseInt(r.query.days) || 30;
+  const identity = await resolveIdentity(api_key, project, event);
+  if (!validateApiKeyRequest(identity, r, rp, 'read')) return;
+
+  const data = await getEventData(identity.eventId, days);
+  return { history: data.history };
+});
+
 // --- Private Authenticated Badge API ---
 fastify.get('/api/v1/badge/:api_key/:project/:event', async (r, rp) => {
   const { api_key, project, event } = r.params;
   const { style = 'classic', label } = r.query;
   
   const identity = await resolveIdentity(api_key, project, event);
-  if (!identity) return rp.status(401).send({ error: 'unauthorized' });
-
-  // Security Rules
-  if (identity.allowedOrigins) {
-    const origin = r.headers['origin'];
-    if (!origin || !identity.allowedOrigins.some(o => origin.includes(o))) {
-      return rp.status(403).send({ error: "forbidden", message: "Origin not allowed" });
-    }
-  }
-  if (identity.allowedIps) {
-    if (!identity.allowedIps.includes(r.ip)) {
-      return rp.status(403).send({ error: "forbidden", message: "IP not allowed" });
-    }
-  }
-
-  if (!identity.scopes.includes('read') && !identity.scopes.includes('admin')) {
-    return rp.status(403).send({ error: 'forbidden', message: "Key lacks 'read' scope" });
-  }
+  if (!validateApiKeyRequest(identity, r, rp, 'read')) return;
 
   const cacheKey = `auth_badge:${identity.eventId}:${style}:${label || ''}`;
   let svg = badgeCache.get(cacheKey);
@@ -813,7 +808,11 @@ async function runWorker() {
   setTimeout(runWorker, config.flushInterval);
 }
 
-// --- Graceful Shutdown ---
+// --- Graceful Shutdown & Health ---
+fastify.get('/health', async (r, rp) => {
+  return { status: 'ok', timestamp: new Date().toISOString() };
+});
+
 async function gracefulShutdown() {
   console.log('\n[System] Shutting down... flushing ping buffer.');
   if (pingBuffer.size > 0) {

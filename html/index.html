@@ -1,212 +1,451 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ping Counter | Dashboard</title>
-    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16x16.png">
-    <link rel="manifest" href="/assets/site.webmanifest">
+    <title>PingCounter | The Modern Metric Engine</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="/assets/js/api.js"></script>
+    <!-- favicons -->
+    <link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16x16.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="48x48" href="/assets/favicon-48x48.png">
+
+    <!-- apple -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+
+    <!-- pwa -->
+    <link rel="manifest" href="/assets/site.webmanifest">
+
+    <!-- android -->
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/android-chrome-192x192.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="/assets/android-chrome-512x512.png">
+
+    <!-- theme -->
+    <meta name="theme-color" content="#000000">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap');
-        body { font-family: 'Plus Jakarta Sans', sans-serif; }
-        .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
-        .animate-slide-up { animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #09090b;
+            color: #e2e8f0;
+        }
+
+        .font-mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .animate-fade-in {
+            animation: fadeIn 0.4s ease-out forwards;
+        }
+
+        .animate-slide-up {
+            animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Subtle grid background for the hero */
+        .bg-grid {
+            background-size: 40px 40px;
+            background-image: linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+            mask-image: linear-gradient(to bottom, black 40%, transparent 100%);
+            -webkit-mask-image: linear-gradient(to bottom, black 40%, transparent 100%);
+        }
+
+        /* Custom scrollbar matching dashboard */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #3f3f46;
+            border-radius: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #52525b;
+        }
     </style>
 </head>
-<body class="bg-[#0b1120] text-slate-50 selection:bg-blue-500/30">
+
+<body class="selection:bg-blue-500/30 overflow-x-hidden antialiased">
     <div id="root"></div>
 
-    <script type="text/babel" src="/assets/js/components.js"></script>
     <script type="text/babel">
-        const { useState, useEffect } = React;
+        const { useState, useEffect, useRef } = React;
 
-        const ProjectList = ({ projects, onSelect, onCreateClick }) => (
-            <div className="animate-fade-in mt-6">
-                <div className="flex justify-between items-center mb-10">
-                    <div>
-                        <h2 className="text-3xl font-black tracking-tighter uppercase text-slate-50">Projects</h2>
-                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mt-1">Manage your tracking workspaces</p>
-                    </div>
-                    <button 
-                        onClick={onCreateClick}
-                        className="bg-blue-600 text-white px-6 py-3 rounded-2xl font-black text-xs flex items-center gap-2 hover:bg-blue-700 transition shadow-xl shadow-blue-500/20 uppercase tracking-widest border border-blue-400/30"
-                    >
-                        <Icon name="plus" size={16} /> New Project
-                    </button>
-                </div>
-                
-                <div className="bg-slate-950 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
-                    <table className="w-full text-left text-sm">
-                        <thead>
-                            <tr className="bg-slate-900 border-b border-slate-800 text-[10px] font-black uppercase text-slate-500 tracking-widest">
-                                <th className="px-8 py-5">Project Workspace</th>
-                                <th className="px-8 py-5">Status</th>
-                                <th className="px-8 py-5 text-right">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-800/50">
-                            {projects.map(p => (
-                                <tr key={p.id} className="hover:bg-slate-900/50 transition-colors group cursor-pointer" onClick={() => onSelect(p)}>
-                                    <td className="px-8 py-6">
-                                        <div className="flex items-center gap-4">
-                                            <div className="bg-slate-800 p-3 rounded-xl text-slate-400 group-hover:text-blue-400 group-hover:bg-blue-600/10 transition-all">
-                                                <Icon name="folder" size={20} />
-                                            </div>
-                                            <div>
-                                                <div className="font-black text-slate-100 uppercase tracking-tight text-base">{p.project_name}</div>
-                                                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">ID: {p.id}</div>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td className="px-8 py-6">
-                                        <span className="flex items-center gap-2 text-[10px] font-black text-emerald-500 uppercase tracking-widest">
-                                            <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span> Active
-                                        </span>
-                                    </td>
-                                    <td className="px-8 py-6 text-right">
-                                        <button className="bg-slate-800 hover:bg-blue-600 text-slate-400 hover:text-white p-2.5 rounded-xl transition border border-slate-700/50 shadow-sm">
-                                            <Icon name="chevron-right" size={18} />
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
+        // --- Shared Components ---
+        const Icon = ({ name, size = 20, className = "" }) => {
+            const iconRef = useRef(null);
+            useEffect(() => {
+                if (window.lucide && iconRef.current) {
+                    window.lucide.createIcons({
+                        attrs: { class: className, width: size, height: size },
+                        nameAttr: 'data-lucide',
+                        root: iconRef.current
+                    });
+                }
+            }, [name, size, className]);
+            return <span ref={iconRef} className="inline-flex items-center justify-center"><i data-lucide={name}></i></span>;
+        };
+
+        const Logo = ({ className = "h-7" }) => (
+            <div className="flex items-center gap-2">
+                <svg className={className} viewBox="0 0 200 40" xmlns="http://www.w3.org/2000/svg">
+                    <g transform="translate(0, 6)" fill="none" stroke="#3b82f6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M22 12h-4l-3 9L9 3 l-3 9H2" transform="scale(1.2)" />
+                    </g>
+                    <text x="40" y="28" fontFamily="'Inter', sans-serif" fontWeight="600" fontSize="20" letterSpacing="-0.5">
+                        <tspan fill="#e2e8f0">ping</tspan>
+                        <tspan fill="#3b82f6">counter</tspan>
+                    </text>
+                </svg>
             </div>
         );
 
-        function Dashboard() {
-            const [user, setUser] = useState(null);
-            const [projects, setProjects] = useState([]);
-            const [loading, setLoading] = useState(true);
-            const [toast, setToast] = useState(null);
-            const [showCreateModal, setShowCreateModal] = useState(false);
-            const [newProjectName, setNewProjectName] = useState('');
-
-            useEffect(() => {
-                if (!api.getToken()) {
-                    window.location.href = '/auth';
-                } else {
-                    fetchData();
-                }
-            }, []);
-
-            const fetchData = async () => {
-                setLoading(true);
-                try {
-                    const u = await api.request('/api/me');
-                    setUser(u);
-                    const p = await api.request('/api/projects');
-                    setProjects(p);
-                } catch (err) {
-                    showToast('Failed to load dashboard data', 'error');
-                }
-                setLoading(false);
-            };
-
-            const handleLogout = () => {
-                api.setToken(null);
-                window.location.href = '/auth';
-            };
-
-            const showToast = (message, type = 'success') => {
-                setToast({ message, type });
-                setTimeout(() => setToast(null), 4000);
-            };
-
-            const handleCreateProject = async (e) => {
-                e.preventDefault();
-                const name = newProjectName.trim();
-                if (!name) return;
-                try {
-                    await api.request('/api/projects', { method: 'POST', body: JSON.stringify({ name }) });
-                    setNewProjectName('');
-                    setShowCreateModal(false);
-                    showToast('Project created successfully');
-                    fetchData();
-                } catch (err) {
-                    showToast('Failed to create project', 'error');
-                }
-            };
-
-            if (loading) return (
-                <div className="h-screen flex items-center justify-center bg-slate-950">
-                    <div className="animate-spin text-blue-500"><Icon name="loader-2" size={40} /></div>
-                </div>
-            );
+        // --- Live Badge Component ---
+        const LiveBadge = ({ label, count }) => {
+            const charWidth = 7;
+            const countStr = count.toLocaleString();
+            const labelWidth = Math.max(45, label.length * charWidth + 20);
+            const countWidth = Math.max(35, countStr.length * 8 + 20);
+            const totalWidth = labelWidth + countWidth;
 
             return (
-                <div className="flex h-screen bg-slate-950 text-slate-200 font-sans overflow-hidden">
-                    <Sidebar activeView="projects" user={user} onLogout={handleLogout} />
+                <svg width={totalWidth} height="20" viewBox={`0 0 ${totalWidth} 20`} xmlns="http://www.w3.org/2000/svg" className="rounded shadow-sm">
+                    <rect width={labelWidth} height="20" fill="#27272a" />
+                    <rect x={labelWidth} width={countWidth} height="20" fill="#3b82f6" />
 
-                    <div className="flex-1 flex flex-col min-w-0 relative">
-                        <Breadcrumb view="projects" />
+                    <text x={labelWidth / 2} y="14" textAnchor="middle" fontFamily="'Inter', sans-serif" fontSize="11" fontWeight="500" fill="#e2e8f0">
+                        {label}
+                    </text>
+                    <text x={labelWidth + (countWidth / 2)} y="14" textAnchor="middle" fontFamily="'Inter', sans-serif" fontSize="11" fill="#ffffff" fontWeight="700">
+                        {countStr}
+                    </text>
+                </svg>
+            );
+        };
 
-                        <main className="flex-1 overflow-y-auto p-8 custom-scrollbar">
-                            <div className="max-w-7xl mx-auto">
-                                <ProjectList 
-                                    projects={projects} 
-                                    onSelect={(p) => window.location.href = `/project?name=${p.project_name}`} 
-                                    onCreateClick={() => setShowCreateModal(true)} 
-                                />
+        // --- Main Landing Page ---
+        function LandingPage() {
+            const [isAuthenticated, setIsAuthenticated] = useState(false);
+            const [activeCodeTab, setActiveCodeTab] = useState(0);
+            const [demoCount, setDemoCount] = useState(14208);
+            const [demoLabel, setDemoLabel] = useState('github-stars');
+            const [pinging, setPinging] = useState(false);
+
+            useEffect(() => {
+                const token = localStorage.getItem('token');
+                setIsAuthenticated(!!token);
+
+                const interval = setInterval(() => {
+                    setActiveCodeTab((prev) => (prev + 1) % 3);
+                }, 5000);
+                return () => clearInterval(interval);
+            }, []);
+
+            const handleDemoPing = () => {
+                if (pinging) return;
+                setPinging(true);
+                setDemoCount(prev => prev + 1);
+                setTimeout(() => setPinging(false), 200);
+            };
+
+            const codeSnippets = [
+                {
+                    name: "curl",
+                    icon: "terminal",
+                    code: `# Track cron jobs or backend processes\ncurl -X POST \\\n  https://pingcounter.dev/p/pc_demo/server/backup`
+                },
+                {
+                    name: "fetch",
+                    icon: "code",
+                    code: `// Trigger anywhere in your React/Vue app\nfetch("https://pingcounter.dev/p/pc_demo/app/signup", {\n  method: 'POST',\n  mode: 'no-cors'\n});`
+                },
+                {
+                    name: "html",
+                    icon: "image",
+                    code: `<!-- Perfect for GitHub READMEs & static sites -->\n<img \n  src="https://pingcounter.dev/p/pc_demo/repo/views" \n  width="1" height="1" \n  style="display:none" \n/>`
+                }
+            ];
+
+            return (
+                <div className="min-h-screen flex flex-col relative">
+                    <div className="absolute inset-0 bg-grid z-0 pointer-events-none"></div>
+
+                    {/* Navigation */}
+                    <nav className="fixed top-0 left-0 right-0 z-50 bg-[#09090b]/90 backdrop-blur-md border-b border-zinc-800/80">
+                        <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
+                            <Logo />
+                            <div className="hidden md:flex items-center gap-6 text-sm font-medium">
+                                <a href="#features" className="text-zinc-400 hover:text-zinc-100 transition-colors">Features</a>
+                                <a href="keys.html" className="text-zinc-400 hover:text-zinc-100 transition-colors">Documentation</a>
                             </div>
-                        </main>
-                    </div>
-
-                    {showCreateModal && (
-                        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 animate-fade-in">
-                            <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setShowCreateModal(false)}></div>
-                            <div className="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-[2.5rem] p-12 relative z-10 shadow-2xl animate-slide-up">
-                                <div className="mb-10">
-                                    <h3 className="text-3xl font-black uppercase tracking-tighter text-white mb-2">Initialize Project</h3>
-                                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Scoped environment for metric aggregation</p>
-                                </div>
-
-                                <form onSubmit={handleCreateProject} className="space-y-8">
-                                    <div>
-                                        <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">Unique Namespace</label>
-                                        <input 
-                                            autoFocus
-                                            type="text" 
-                                            placeholder="e.g. monolith-production"
-                                            value={newProjectName}
-                                            onChange={(e) => setNewProjectName(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'))}
-                                            className="w-full bg-slate-950 border border-slate-800 rounded-2xl px-6 py-4 text-slate-100 font-bold outline-none focus:ring-2 ring-blue-500/50 transition-all placeholder:text-slate-700"
-                                        />
-                                        <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest mt-4">Endpoint Path Pattern: /p/:key/<span className="text-blue-500">{newProjectName || '{slug}'}</span>/:event</p>
-                                    </div>
-                                    
-                                    <div className="flex gap-4">
-                                        <button type="button" onClick={() => setShowCreateModal(false)} className="flex-1 px-8 py-4 rounded-2xl bg-slate-800 text-slate-400 font-black text-xs uppercase tracking-widest hover:bg-slate-700 transition">Cancel</button>
-                                        <button type="submit" disabled={!newProjectName.trim()} className="flex-[2] px-8 py-4 rounded-2xl bg-blue-600 text-white font-black text-xs uppercase tracking-widest hover:bg-blue-500 transition shadow-xl shadow-blue-900/20 disabled:opacity-50">Create Workspace</button>
-                                    </div>
-                                </form>
+                            <div className="flex items-center gap-4">
+                                {isAuthenticated ? (
+                                    <a href="dashboard.html" className="text-sm font-medium text-white hover:text-zinc-200 transition">
+                                        Dashboard <span aria-hidden="true">&rarr;</span>
+                                    </a>
+                                ) : (
+                                    <>
+                                        <a href="auth.html" className="text-sm font-medium text-zinc-400 hover:text-zinc-100 transition hidden sm:block">Log In</a>
+                                        <a href="auth.html" className="bg-white text-black px-4 py-1.5 rounded-md text-sm font-medium hover:bg-zinc-200 transition shadow-sm">
+                                            Start for Free
+                                        </a>
+                                    </>
+                                )}
                             </div>
                         </div>
-                    )}
+                    </nav>
 
-                    {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+                    {/* Hero Section */}
+                    <main className="pt-32 pb-24 px-6 relative z-10 flex-1">
+                        <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-[1fr_500px] gap-12 lg:gap-20 items-center">
+
+                            {/* Hero Text */}
+                            <div className="space-y-6 animate-slide-up">
+                                <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-md bg-zinc-900 border border-zinc-800 text-zinc-300 text-xs font-medium">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                                    PingCounter v1.4 available
+                                </div>
+                                <h1 className="text-4xl sm:text-5xl lg:text-6xl font-semibold text-slate-100 tracking-tight leading-[1.1]">
+                                    The Modern <br />Metric Engine.
+                                </h1>
+                                <p className="text-base sm:text-lg text-slate-400 leading-relaxed max-w-lg">
+                                    High-performance event ingestion, real-time analytics, and dynamic SVG badges. Track anything with a simple URL. No database setup required.
+                                </p>
+
+                                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 pt-2">
+                                    <a href={isAuthenticated ? "dashboard.html" : "auth.html"} className="w-full sm:w-auto px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-md text-sm font-medium transition shadow-sm text-center">
+                                        Start Tracking — Free
+                                    </a>
+                                    <a href="keys.html" className="w-full sm:w-auto px-5 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-slate-300 border border-zinc-800 rounded-md text-sm font-medium transition text-center flex items-center justify-center gap-2">
+                                        <Icon name="book" size={16} /> Read the Docs
+                                    </a>
+                                </div>
+
+                                <div className="flex items-center gap-4 pt-8 text-zinc-600">
+                                    <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">Integrates with</span>
+                                    <Icon name="github" size={20} className="hover:text-zinc-400 transition-colors cursor-pointer" />
+                                    <Icon name="globe" size={20} className="hover:text-zinc-400 transition-colors cursor-pointer" />
+                                    <Icon name="terminal" size={20} className="hover:text-zinc-400 transition-colors cursor-pointer" />
+                                    <Icon name="mail" size={20} className="hover:text-zinc-400 transition-colors cursor-pointer" />
+                                </div>
+                            </div>
+
+                            {/* Hero Code IDE */}
+                            <div className="animate-slide-up" style={{ animationDelay: '0.1s' }}>
+                                <div className="bg-[#09090b] rounded-xl border border-zinc-800 shadow-2xl overflow-hidden flex flex-col h-[320px]">
+                                    {/* IDE Header */}
+                                    <div className="flex items-center bg-zinc-900/50 border-b border-zinc-800 overflow-x-auto">
+                                        {codeSnippets.map((snippet, idx) => (
+                                            <button
+                                                key={idx}
+                                                onClick={() => setActiveCodeTab(idx)}
+                                                className={`px-4 py-2.5 text-xs font-mono transition-colors flex items-center gap-2 border-r border-zinc-800 shrink-0 ${activeCodeTab === idx ? `bg-[#09090b] text-blue-400` : `text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/30`
+                                                    }`}
+                                            >
+                                                <Icon name={snippet.icon} size={14} />
+                                                {snippet.name}
+                                            </button>
+                                        ))}
+                                    </div>
+
+                                    {/* IDE Content */}
+                                    <div className="p-6 flex-1 bg-[#09090b] font-mono text-[13px] leading-relaxed overflow-auto">
+                                        <pre className="text-zinc-300">
+                                            <code dangerouslySetInnerHTML={{
+                                                __html: codeSnippets[activeCodeTab].code
+                                                    .replace(/<!--(.*?)-->/g, '<span class="text-zinc-500 italic">&lt;!--$1--&gt;</span>')
+                                                    .replace(/\/\/(.*?)\n/g, '<span class="text-zinc-500 italic">//$1</span>\n')
+                                                    .replace(/#(.*?)\n/g, '<span class="text-zinc-500 italic">#$1</span>\n')
+                                                    .replace(/(".*?")/g, '<span class="text-emerald-400">$1</span>')
+                                                    .replace(/'(.*?)'/g, '<span class="text-emerald-400">\'$1\'</span>')
+                                                    .replace(/(fetch|curl|img)/g, '<span class="text-blue-400">$1</span>')
+                                            }} />
+                                        </pre>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+                    </main>
+
+                    {/* Interactive Proof Section */}
+                    <section className="py-20 relative z-10 border-t border-zinc-800/50 bg-[#09090b]">
+                        <div className="max-w-6xl mx-auto px-6">
+                            <div className="mb-10 max-w-2xl">
+                                <h2 className="text-2xl font-semibold text-white tracking-tight mb-3">Real-Time Telemetry. Zero Delay.</h2>
+                                <p className="text-zinc-400 text-sm">PingCounter processes ingestion through a highly-optimized memory buffer, meaning your stats and badges update instantly.</p>
+                            </div>
+
+                            <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-6 sm:p-8">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
+
+                                    <div className="space-y-6">
+                                        <div>
+                                            <label className="block text-xs font-medium text-zinc-400 mb-2">1. Customize Event Label</label>
+                                            <input
+                                                type="text"
+                                                value={demoLabel}
+                                                onChange={(e) => setDemoLabel(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'))}
+                                                maxLength="20"
+                                                className="w-full bg-[#09090b] border border-zinc-800 rounded-md px-3 py-2 text-zinc-200 text-sm font-mono outline-none focus:border-blue-500 transition-colors"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-medium text-zinc-400 mb-2">2. Trigger Network Request</label>
+                                            <button
+                                                onClick={handleDemoPing}
+                                                className="w-full py-2 bg-zinc-800 hover:bg-zinc-700 text-slate-200 rounded-md text-sm font-medium transition flex items-center justify-center gap-2 border border-zinc-700 active:scale-[0.98]"
+                                            >
+                                                <Icon name="zap" size={16} className={pinging ? "text-blue-400" : "text-zinc-400"} />
+                                                Send Ping Request
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex flex-col items-center justify-center p-8 bg-[#09090b] rounded-lg border border-zinc-800/80 h-full">
+                                        <div className="text-xs font-medium text-zinc-500 mb-4 flex items-center gap-2">
+                                            <Icon name="eye" size={14} /> Edge SVG Render
+                                        </div>
+                                        <div className={`transition-transform duration-75 ${pinging ? 'scale-105' : 'scale-100'}`}>
+                                            <LiveBadge label={demoLabel || "hits"} count={demoCount} />
+                                        </div>
+                                        <div className="mt-6 flex gap-4 text-xs font-mono text-zinc-500">
+                                            <div>Status: <span className="text-emerald-400">204</span></div>
+                                            <div>Latency: <span className="text-blue-400">12ms</span></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* Features Bento Grid */}
+                    <section id="features" className="py-20 relative z-10 border-t border-zinc-800/50 bg-[#09090b]">
+                        <div className="max-w-6xl mx-auto px-6">
+                            <div className="mb-10">
+                                <h2 className="text-2xl font-semibold text-white tracking-tight mb-2">Engineered for Scale.</h2>
+                                <p className="text-sm text-zinc-400">Enterprise-grade architecture in a developer-friendly package.</p>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {/* Feature 1 */}
+                                <div className="bg-zinc-950 p-6 rounded-xl border border-zinc-800 hover:border-zinc-700 transition-colors">
+                                    <div className="w-8 h-8 rounded-md bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mb-4 text-blue-400">
+                                        <Icon name="database-zap" size={16} />
+                                    </div>
+                                    <h3 className="text-sm font-semibold text-white mb-2">High-Speed Ingestion</h3>
+                                    <p className="text-xs text-zinc-400 leading-relaxed">
+                                        Pings are buffered in-memory and flushed to Postgres in background batches, ensuring zero database locking and guaranteed sub-10ms latency.
+                                    </p>
+                                </div>
+
+                                {/* Feature 2 */}
+                                <div className="bg-zinc-950 p-6 rounded-xl border border-zinc-800 hover:border-zinc-700 transition-colors">
+                                    <div className="w-8 h-8 rounded-md bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mb-4 text-emerald-400">
+                                        <Icon name="shield-check" size={16} />
+                                    </div>
+                                    <h3 className="text-sm font-semibold text-white mb-2">Granular Security</h3>
+                                    <p className="text-xs text-zinc-400 leading-relaxed">
+                                        API keys are scoped strictly to <code className="bg-[#09090b] px-1 rounded border border-zinc-800 font-mono">ping</code>, <code className="bg-[#09090b] px-1 rounded border border-zinc-800 font-mono">read</code>, or <code className="bg-[#09090b] px-1 rounded border border-zinc-800 font-mono">admin</code>. Support for CORS origin whitelisting and IP restrictions out of the box.
+                                    </p>
+                                </div>
+
+                                {/* Feature 3 */}
+                                <div className="bg-zinc-950 p-6 rounded-xl border border-zinc-800 hover:border-zinc-700 transition-colors">
+                                    <div className="w-8 h-8 rounded-md bg-purple-500/10 border border-purple-500/20 flex items-center justify-center mb-4 text-purple-400">
+                                        <Icon name="wand-2" size={16} />
+                                    </div>
+                                    <h3 className="text-sm font-semibold text-white mb-2">Zero-Config Setup</h3>
+                                    <p className="text-xs text-zinc-400 leading-relaxed">
+                                        Trigger a ping to a new namespace, and our engine automatically provisions the event tracker in the background. No dashboard clicks required.
+                                    </p>
+                                </div>
+
+                                {/* Feature 4 (Wide) */}
+                                <div className="bg-zinc-950 p-6 rounded-xl border border-zinc-800 lg:col-span-3 flex flex-col md:flex-row items-center justify-between gap-8">
+                                    <div className="max-w-2xl">
+                                        <div className="w-8 h-8 rounded-md bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mb-4 text-amber-400">
+                                            <Icon name="palette" size={16} />
+                                        </div>
+                                        <h3 className="text-sm font-semibold text-white mb-2">Visual-First Analytics</h3>
+                                        <p className="text-xs text-zinc-400 leading-relaxed">
+                                            Generate dynamic SVG badges for any event instantly. Support for public hashed slugs or authenticated read keys. Designed for status pages, GitHub READMEs, and portfolios.
+                                        </p>
+                                    </div>
+                                    <div className="shrink-0 flex flex-col gap-3 bg-[#09090b] p-4 rounded-lg border border-zinc-800">
+                                        <img src="https://img.shields.io/badge/Page_Views-14,208-2563eb?style=flat&logo=activitypub&logoColor=white" alt="Example Badge Flat" className="h-5" />
+                                        <img src="https://img.shields.io/badge/API_Requests-1.2M-10b981?style=for-the-badge" alt="Example Badge For The Badge" className="h-6" />
+                                        <img src="https://img.shields.io/badge/Total_Downloads-89k-8b5cf6?style=flat-square" alt="Example Badge Square" className="h-5" />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* Footer / Final CTA */}
+                    <footer className="border-t border-zinc-800/80 bg-[#09090b] pt-16 pb-8">
+                        <div className="max-w-6xl mx-auto px-6">
+                            <div className="flex flex-col items-center text-center mb-16">
+                                <h2 className="text-2xl font-semibold text-white tracking-tight mb-6">Stop guessing. Start counting.</h2>
+                                <a href={isAuthenticated ? "dashboard.html" : "auth.html"} className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-md text-sm font-medium transition shadow-sm">
+                                    Create Free Workspace
+                                </a>
+                            </div>
+
+                            <div className="flex flex-col md:flex-row items-center justify-between gap-4 border-t border-zinc-800/50 pt-8 text-xs font-medium text-zinc-500">
+                                <div className="flex items-center gap-2 text-zinc-400">
+                                    <Logo className="h-5 opacity-60 grayscale" />
+                                </div>
+                                <div className="flex gap-6">
+                                    <a href="keys.html" className="hover:text-zinc-300 transition">Documentation</a>
+                                    <a href="#" className="hover:text-zinc-300 transition">Privacy Policy</a>
+                                    <a href="#" className="hover:text-zinc-300 transition">Terms</a>
+                                </div>
+                            </div>
+                        </div>
+                    </footer>
                 </div>
             );
         }
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<Dashboard />);
+        root.render(<LandingPage />);
     </script>
 </body>
+
 </html>

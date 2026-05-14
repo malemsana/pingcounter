@@ -622,10 +622,10 @@
                                                 onMouseLeave={() => handleHover(null)}
                                             >
                                                 <div className={`transition-opacity duration-300 ${hoveredStyle && hoveredStyle !== style ? 'opacity-30' : 'opacity-100'}`}>
-                                                    <img 
-                                                        src={`${apiBase}/api/badge-preview?style=${style}&label=${encodeURIComponent(event.event_name)}&count=${eventStats?.total || 0}`} 
-                                                        alt={style} 
-                                                        className="h-5" 
+                                                    <img
+                                                        src={`${apiBase}/api/badge-preview?style=${style}&label=${encodeURIComponent(event.event_name)}&count=${eventStats?.total || 0}`}
+                                                        alt={style}
+                                                        className="h-5"
                                                     />
                                                     <div className="text-[9px] font-mono text-slate-600 uppercase mt-4 text-center">{style}</div>
                                                 </div>
@@ -1443,6 +1443,7 @@
             const [showNewEventModal, setShowNewEventModal] = React.useState(false);
             const [accountUsage, setAccountUsage] = useState(null);
             const [availableBadgeStyles, setAvailableBadgeStyles] = useState([]);
+            const [newProjectName, setNewProjectName] = useState('');
 
             useEffect(() => {
                 if (token) fetchInitialData();
@@ -1474,16 +1475,23 @@
             };
 
             const fetchInitialData = async () => {
-                const res = await fetch(`${API_BASE}/api/me`, { headers: { 'Authorization': `Bearer ${token}` } });
-                if (res.ok) {
-                    setUser(await res.json());
-                    loadProjects();
+                console.log(`[App] Initializing. API_BASE is set to: ${API_BASE}`);
+                try {
+                    const res = await fetch(`${API_BASE}/api/me`, { headers: { 'Authorization': `Bearer ${token}` } });
+                    if (res.ok) {
+                        setUser(await res.json());
+                        await loadProjects();
 
-                    // Fetch badge templates
-                    const styles = await apiRequest('/api/badge-templates', {}, true);
-                    if (styles) setAvailableBadgeStyles(styles);
-                } else {
-                    handleLogout();
+                        // Fetch badge templates
+                        const styles = await apiRequest('/api/badge-templates', {}, true);
+                        if (styles) setAvailableBadgeStyles(styles);
+                    } else {
+                        handleLogout();
+                    }
+                } catch (err) {
+                    console.error("Initialization failed:", err);
+                    showToast("Failed to connect to API backend.", "error");
+                    setView('error');
                 }
             };
 
@@ -1558,10 +1566,16 @@
             };
 
             const loadProjects = async () => {
-                const data = await apiRequest('/api/projects');
-                if (data) {
-                    setProjects(data);
-                    setView('projects');
+                try {
+                    const data = await apiRequest('/api/projects');
+                    if (data) {
+                        setProjects(data);
+                        setView('projects');
+                    } else {
+                        if (view === 'loading') setView('error');
+                    }
+                } catch (e) {
+                    if (view === 'loading') setView('error');
                 }
             };
 
@@ -1777,6 +1791,20 @@
                                         updateProfile={updateProfile}
                                         updatePassword={updatePassword}
                                     />
+                                )}
+
+                                {view === 'error' && (
+                                    <div className="h-full flex items-center justify-center p-8 text-center text-slate-500 animate-fade-in mt-12">
+                                        <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-8 rounded-xl max-w-md shadow-xl mx-auto">
+                                            <Icon name="server-crash" size={40} className="mx-auto mb-5 text-red-500/80" />
+                                            <h3 className="font-semibold text-xl mb-3 text-red-500">Backend Unreachable</h3>
+                                            <p className="text-sm leading-relaxed">Could not establish a connection to the PingCounter API. Please check your network or try again later.</p>
+                                            <div className="text-[11px] mt-6 bg-[#09090b] border border-red-500/20 px-3 py-2 rounded font-mono break-all text-red-400/80">API_BASE: {API_BASE}</div>
+                                            <button onClick={() => window.location.reload()} className="mt-6 px-6 py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-md text-sm font-medium transition shadow-sm border border-red-500 w-full flex items-center justify-center gap-2">
+                                                <Icon name="refresh-cw" size={16} /> Retry Connection
+                                            </button>
+                                        </div>
+                                    </div>
                                 )}
                             </div>
                         </main>
